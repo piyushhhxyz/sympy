@@ -24,6 +24,31 @@ from .precedence import precedence, PRECEDENCE
 import mpmath.libmp as mlib
 from mpmath.libmp import prec_to_dps
 
+
+def _matmul_coeff_isneg(expr):
+    """Check if the coefficient of a MatMul is negative."""
+    from sympy import MatMul
+    if isinstance(expr, MatMul):
+        # The first arg of MatMul can be a scalar coefficient
+        return expr.args[0].is_number and expr.args[0].is_negative
+    return False
+
+
+def _negate_matmul(expr):
+    """Negate a MatMul by negating its scalar coefficient.
+
+    Unlike -expr, this properly simplifies (-1)*(-1) to 1.
+    Returns a MatMul without the negative coefficient.
+    """
+    from sympy import MatMul
+    if isinstance(expr, MatMul):
+        coeff, matrices = expr.as_coeff_matrices()
+        neg_coeff = -coeff
+        if neg_coeff == 1:
+            return MatMul(*matrices)
+        return MatMul(neg_coeff, *matrices)
+    return -expr
+
 from sympy.core.compatibility import default_sort_key, range
 from sympy.utilities.iterables import has_variety
 
@@ -1478,17 +1503,32 @@ class LatexPrinter(Printer):
 
     def _print_MatAdd(self, expr):
         terms = list(expr.args)
-        tex = " + ".join(map(self._print, terms))
+        tex = ""
+        for i, term in enumerate(terms):
+            if i == 0:
+                pass
+            elif _coeff_isneg(term) or _matmul_coeff_isneg(term):
+                tex += " - "
+                term = _negate_matmul(term)
+            else:
+                tex += " + "
+            tex += self._print(term)
         return tex
 
     def _print_MatMul(self, expr):
-        from sympy import Add, MatAdd, HadamardProduct
+        from sympy import Add, MatAdd, HadamardProduct, MatMul
 
         def parens(x):
             if isinstance(x, (Add, MatAdd, HadamardProduct)):
                 return r"\left(%s\right)" % self._print(x)
             return self._print(x)
-        return ' '.join(map(parens, expr.args))
+
+        args = list(expr.args)
+        if isinstance(expr, MatMul) and args[0] == S.NegativeOne:
+            if len(args) == 1:
+                return '-1'
+            return '- ' + ' '.join(map(parens, args[1:]))
+        return ' '.join(map(parens, args))
 
     def _print_Mod(self, expr, exp=None):
         if exp is not None:
