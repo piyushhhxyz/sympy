@@ -164,9 +164,23 @@ class BlockMatrix(MatrixExpr):
     def _blockmul(self, other):
         if (isinstance(other, BlockMatrix) and
                 self.colblocksizes == other.rowblocksizes):
-            return BlockMatrix(self.blocks*other.blocks)
+            return BlockMatrix(self._blockmul_fixup(
+                self.blocks*other.blocks,
+                self.rowblocksizes, other.colblocksizes))
 
         return self * other
+
+    @staticmethod
+    def _blockmul_fixup(mat, rowblocksizes, colblocksizes):
+        """Convert any scalar Zero entries in a block matrix product to
+        ZeroMatrix with the correct dimensions."""
+        from sympy.matrices.immutable import ImmutableDenseMatrix
+        newmat = [
+            [mat[i, j] if getattr(mat[i, j], 'is_Matrix', False)
+             else ZeroMatrix(rowblocksizes[i], colblocksizes[j])
+             for j in range(mat.cols)]
+            for i in range(mat.rows)]
+        return ImmutableDenseMatrix(newmat)
 
     def _blockadd(self, other):
         if (isinstance(other, BlockMatrix)

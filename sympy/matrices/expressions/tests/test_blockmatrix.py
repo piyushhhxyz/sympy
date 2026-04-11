@@ -3,7 +3,7 @@ from sympy.matrices.expressions.blockmatrix import (
     BlockMatrix, bc_dist, bc_matadd, bc_transpose, bc_inverse,
     blockcut, reblock_2x2, deblock)
 from sympy.matrices.expressions import (MatrixSymbol, Identity,
-        Inverse, trace, Transpose, det)
+        Inverse, trace, Transpose, det, ZeroMatrix)
 from sympy.matrices import (
     Matrix, ImmutableMatrix, ImmutableSparseMatrix)
 from sympy.core import Tuple, symbols, Expr
@@ -222,3 +222,36 @@ def test_block_collapse_type():
     assert block_collapse(Transpose(bm1)).__class__ == BlockDiagMatrix
     assert bc_transpose(Transpose(bm1)).__class__ == BlockDiagMatrix
     assert bc_inverse(Inverse(bm1)).__class__ == BlockDiagMatrix
+
+
+def test_blockmul_zero_blocks():
+    """Test that BlockMatrix multiplication works when ZeroMatrix blocks
+    are present. Regression test for issue #17630."""
+    a = MatrixSymbol("a", 2, 2)
+    z = ZeroMatrix(2, 2)
+    b = BlockMatrix([[a, z], [z, z]])
+
+    # Single blockmul should produce ZeroMatrix, not scalar Zero
+    bb = b._blockmul(b)
+    assert bb == BlockMatrix([[a**2, z], [z, z]])
+    # Verify the zero blocks are ZeroMatrix, not scalar Zero
+    assert bb.blocks[0, 1].__class__ == ZeroMatrix
+    assert bb.blocks[1, 0].__class__ == ZeroMatrix
+    assert bb.blocks[1, 1].__class__ == ZeroMatrix
+
+    # Double blockmul should not raise AttributeError
+    bbb = bb._blockmul(b)
+    assert bbb == BlockMatrix([[a**3, z], [z, z]])
+
+    # block_collapse with triple product should work
+    assert block_collapse(b * b * b) == BlockMatrix([[a**3, z], [z, z]])
+
+    # Test with different sized blocks
+    x = MatrixSymbol('x', 2, 2)
+    y = MatrixSymbol('y', 3, 3)
+    z23 = ZeroMatrix(2, 3)
+    z32 = ZeroMatrix(3, 2)
+    b2 = BlockMatrix([[x, z23], [z32, y]])
+    assert block_collapse(b2 * b2 * b2) == BlockMatrix([
+        [x**3, ZeroMatrix(2, 3)],
+        [ZeroMatrix(3, 2), y**3]])
