@@ -819,19 +819,48 @@ class PrettyPrinter(Printer):
         return self._print(B.blocks)
 
     def _print_MatAdd(self, expr):
-        return self._print_seq(expr.args, None, None, ' + ')
+        s = None
+        for i, t in enumerate(expr.args):
+            pform = self._print(t)
+            if str(pform).startswith('-'):
+                if s is None:
+                    s = pform
+                else:
+                    s = prettyForm(*stringPict.next(s, ' '))
+                    s = prettyForm(*stringPict.next(s, pform))
+            else:
+                if s is None:
+                    s = pform
+                else:
+                    s = prettyForm(*stringPict.next(s, ' + '))
+                    s = prettyForm(*stringPict.next(s, pform))
+        return s
 
     def _print_MatMul(self, expr):
-        args = list(expr.args)
         from sympy import Add, MatAdd, HadamardProduct
+
+        args = list(expr.args)
+        # Pull out the negative sign from the leading coefficient
+        sign = ""
+        if args[0].is_number and args[0] < 0:
+            sign = "-"
+            if args[0] == -1:
+                args = args[1:]
+            else:
+                args[0] = -args[0]
+
+        pforms = []
         for i, a in enumerate(args):
             if (isinstance(a, (Add, MatAdd, HadamardProduct))
-                    and len(expr.args) > 1):
-                args[i] = prettyForm(*self._print(a).parens())
+                    and len(args) > 1):
+                pforms.append(prettyForm(*self._print(a).parens()))
             else:
-                args[i] = self._print(a)
+                pforms.append(self._print(a))
 
-        return prettyForm.__mul__(*args)
+        result = prettyForm.__mul__(*pforms)
+        if sign:
+            result = prettyForm(*result.left(sign))
+        return result
 
     def _print_DotProduct(self, expr):
         args = list(expr.args)
