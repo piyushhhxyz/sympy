@@ -819,11 +819,34 @@ class PrettyPrinter(Printer):
         return self._print(B.blocks)
 
     def _print_MatAdd(self, expr):
-        return self._print_seq(expr.args, None, None, ' + ')
+        from sympy.matrices.expressions.matmul import MatMul
+        s = None
+        for i, t in enumerate(expr.args):
+            if isinstance(t, MatMul) and t.could_extract_minus_sign():
+                # Extract the positive part for proper " - X" formatting
+                c, m = t.as_coeff_mmul()
+                pform = self._print((-c)*m)
+                if s is None:
+                    # First term is negative: prepend "-"
+                    s = prettyForm(*stringPict.next('-', pform))
+                else:
+                    s = prettyForm(*stringPict.next(s, ' - '))
+                    s = prettyForm(*stringPict.next(s, pform))
+            else:
+                pform = self._print(t)
+                if s is None:
+                    s = pform
+                else:
+                    s = prettyForm(*stringPict.next(s, ' + '))
+                    s = prettyForm(*stringPict.next(s, pform))
+        if s is None:
+            s = stringPict('')
+        return s
 
     def _print_MatMul(self, expr):
-        args = list(expr.args)
         from sympy import Add, MatAdd, HadamardProduct
+
+        args = list(expr.args)
         for i, a in enumerate(args):
             if (isinstance(a, (Add, MatAdd, HadamardProduct))
                     and len(expr.args) > 1):

@@ -1478,17 +1478,30 @@ class LatexPrinter(Printer):
 
     def _print_MatAdd(self, expr):
         terms = list(expr.args)
-        tex = " + ".join(map(self._print, terms))
+        tex = ""
+        for i, term in enumerate(terms):
+            term_tex = self._print(term)
+            if i == 0:
+                tex = term_tex
+            elif term_tex.startswith('-'):
+                tex += " - " + term_tex[1:].lstrip()
+            else:
+                tex += " + " + term_tex
         return tex
 
     def _print_MatMul(self, expr):
-        from sympy import Add, MatAdd, HadamardProduct
+        from sympy import Add, MatAdd, HadamardProduct, S
 
         def parens(x):
             if isinstance(x, (Add, MatAdd, HadamardProduct)):
                 return r"\left(%s\right)" % self._print(x)
             return self._print(x)
-        return ' '.join(map(parens, expr.args))
+
+        args = list(expr.args)
+        if args[0] == S.NegativeOne:
+            return '-' + ' '.join(map(parens, args[1:]))
+        else:
+            return ' '.join(map(parens, args))
 
     def _print_Mod(self, expr, exp=None):
         if exp is not None:

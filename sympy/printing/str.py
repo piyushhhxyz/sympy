@@ -304,16 +304,44 @@ class StrPrinter(Printer):
             return sign + '*'.join(a_str) + "/(%s)" % '*'.join(b_str)
 
     def _print_MatMul(self, expr):
-        return '*'.join([self.parenthesize(arg, precedence(expr))
-            for arg in expr.args])
+        from sympy.matrices.expressions.matmul import MatMul
+
+        c, m = expr.as_coeff_mmul()
+
+        sign = ""
+        if c.is_number and c < 0:
+            expr = (-c)*m
+            sign = "-"
+
+        if isinstance(expr, MatMul):
+            return sign + '*'.join([self.parenthesize(arg, precedence(expr))
+                for arg in expr.args])
+        else:
+            return sign + self._print(expr)
 
     def _print_HadamardProduct(self, expr):
         return '.*'.join([self.parenthesize(arg, precedence(expr))
             for arg in expr.args])
 
     def _print_MatAdd(self, expr):
-        return ' + '.join([self.parenthesize(arg, precedence(expr))
-            for arg in expr.args])
+        terms = list(expr.args)
+        PREC = precedence(expr)
+        l = []
+        for term in terms:
+            t = self._print(term)
+            if t.startswith('-'):
+                sign = "-"
+                t = t[1:]
+            else:
+                sign = "+"
+            if precedence(term) < PREC:
+                l.extend([sign, "(%s)" % t])
+            else:
+                l.extend([sign, t])
+        sign = l.pop(0)
+        if sign == '+':
+            sign = ""
+        return sign + ' '.join(l)
 
     def _print_NaN(self, expr):
         return 'nan'
