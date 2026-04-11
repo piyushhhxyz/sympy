@@ -1,18 +1,21 @@
-from __future__ import print_function, division
+from __future__ import annotations
 import functools, itertools
-from sympy.core.sympify import sympify
+from sympy.core.sympify import _sympify, sympify
 from sympy.core.expr import Expr
-from sympy.core import Basic
-from sympy.core.compatibility import Iterable
-from sympy.tensor.array import MutableDenseNDimArray, ImmutableDenseNDimArray
-from sympy import Symbol
-from sympy.core.sympify import sympify
+from sympy.core import Basic, Tuple
+from sympy.tensor.array import ImmutableDenseNDimArray
+from sympy.core.symbol import Symbol
 from sympy.core.numbers import Integer
+from sympy.utilities.decorator import deprecated
 
 
 class ArrayComprehension(Basic):
     """
-    Generate a list comprehension
+    Generate a list comprehension.
+
+    Explanation
+    ===========
+
     If there is a symbolic dimension, for example, say [i for i in range(1, N)] where
     N is a Symbol, then the expression will not be expanded to an array. Otherwise,
     calling the doit() function will launch the expansion.
@@ -41,13 +44,13 @@ class ArrayComprehension(Basic):
         obj = Basic.__new__(cls, *arglist, **assumptions)
         obj._limits = obj._args[1:]
         obj._shape = cls._calculate_shape_from_limits(obj._limits)
-        obj._rank = len(obj._shape)
+        obj._ndim = len(obj._shape)
         obj._loop_size = cls._calculate_loop_size(obj._shape)
         return obj
 
     @property
     def function(self):
-        """The function applied across limits
+        """The function applied across limits.
 
         Examples
         ========
@@ -64,7 +67,7 @@ class ArrayComprehension(Basic):
     @property
     def limits(self):
         """
-        The list of limits that will be applied while expanding the array
+        The list of limits that will be applied while expanding the array.
 
         Examples
         ========
@@ -81,7 +84,7 @@ class ArrayComprehension(Basic):
     @property
     def free_symbols(self):
         """
-        The set of the free_symbols in the array
+        The set of the free_symbols in the array.
         Variables appeared in the bounds are supposed to be excluded
         from the free symbol set.
 
@@ -107,7 +110,7 @@ class ArrayComprehension(Basic):
 
     @property
     def variables(self):
-        """The tuples of the variables in the limits
+        """The tuples of the variables in the limits.
 
         Examples
         ========
@@ -123,7 +126,7 @@ class ArrayComprehension(Basic):
 
     @property
     def bound_symbols(self):
-        """The list of dummy variables
+        """The list of dummy variables.
 
         Note
         ====
@@ -136,7 +139,7 @@ class ArrayComprehension(Basic):
     @property
     def shape(self):
         """
-        The shape of the expanded array, which may have symbols
+        The shape of the expanded array, which may have symbols.
 
         Note
         ====
@@ -163,7 +166,7 @@ class ArrayComprehension(Basic):
     def is_shape_numeric(self):
         """
         Test if the array is shape-numeric which means there is no symbolic
-        dimension
+        dimension.
 
         Examples
         ========
@@ -183,8 +186,14 @@ class ArrayComprehension(Basic):
                 return False
         return True
 
+    @deprecated("DO NOT USE",
+                deprecated_since_version="1.15", active_deprecations_target="ndim-array-rank")
     def rank(self):
-        """The rank of the expanded array
+        return self.ndim
+
+    @property
+    def ndim(self):
+        """The number of dimensions of the expanded array.
 
         Examples
         ========
@@ -193,10 +202,10 @@ class ArrayComprehension(Basic):
         >>> from sympy import symbols
         >>> i, j, k = symbols('i j k')
         >>> a = ArrayComprehension(10*i + j, (i, 1, 4), (j, 1, 3))
-        >>> a.rank()
+        >>> a.ndim
         2
         """
-        return self._rank
+        return self._ndim
 
     def __len__(self):
         """
@@ -224,8 +233,18 @@ class ArrayComprehension(Basic):
 
     @classmethod
     def _check_limits_validity(cls, function, limits):
-        limits = sympify(limits)
+        #limits = sympify(limits)
+        new_limits = []
         for var, inf, sup in limits:
+            var = _sympify(var)
+            inf = _sympify(inf)
+            #since this is stored as an argument, it should be
+            #a Tuple
+            if isinstance(sup, list):
+                sup = Tuple(*sup)
+            else:
+                sup = _sympify(sup)
+            new_limits.append(Tuple(var, inf, sup))
             if any((not isinstance(i, Expr)) or i.atoms(Symbol, Integer) != i.atoms()
                                                                 for i in [inf, sup]):
                 raise TypeError('Bounds should be an Expression(combination of Integer and Symbol)')
@@ -233,7 +252,7 @@ class ArrayComprehension(Basic):
                 raise ValueError('Lower bound should be inferior to upper bound')
             if var in inf.free_symbols or var in sup.free_symbols:
                 raise ValueError('Variable should not be part of its bounds')
-        return limits
+        return new_limits
 
     @classmethod
     def _calculate_shape_from_limits(cls, limits):
@@ -249,7 +268,7 @@ class ArrayComprehension(Basic):
 
         return loop_size
 
-    def doit(self):
+    def doit(self, **hints):
         if not self.is_shape_numeric:
             return self
 
@@ -271,7 +290,7 @@ class ArrayComprehension(Basic):
         return temp
 
     def tolist(self):
-        """Transform the expanded array to a list
+        """Transform the expanded array to a list.
 
         Raises
         ======
@@ -294,7 +313,7 @@ class ArrayComprehension(Basic):
         raise ValueError("A symbolic array cannot be expanded to a list")
 
     def tomatrix(self):
-        """Transform the expanded array to a matrix
+        """Transform the expanded array to a matrix.
 
         Raises
         ======
@@ -320,7 +339,7 @@ class ArrayComprehension(Basic):
 
         if not self.is_shape_numeric:
             raise ValueError("A symbolic array cannot be expanded to a matrix")
-        if self._rank != 2:
+        if self._ndim != 2:
             raise ValueError('Dimensions must be of size of 2')
 
         return Matrix(self._expand_array().tomatrix())
@@ -367,7 +386,7 @@ class ArrayComprehensionMap(ArrayComprehension):
         obj = Basic.__new__(cls, *arglist, **assumptions)
         obj._limits = obj._args
         obj._shape = cls._calculate_shape_from_limits(obj._limits)
-        obj._rank = len(obj._shape)
+        obj._ndim = len(obj._shape)
         obj._loop_size = cls._calculate_loop_size(obj._shape)
         obj._lambda = function
         return obj

@@ -1,4 +1,7 @@
-from sympy import diff, sin, symbols, Function, Derivative
+from __future__ import annotations
+from sympy.core.function import (Derivative, Function, diff)
+from sympy.core.symbol import symbols
+from sympy.functions.elementary.trigonometric import sin
 from sympy.core.multidimensional import vectorize
 x, y, z = symbols('x y z')
 f, g, h = list(map(Function, 'fgh'))

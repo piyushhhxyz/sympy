@@ -1,3 +1,4 @@
+from __future__ import annotations
 import itertools as it
 
 from sympy.core.expr import unchanged
@@ -10,12 +11,12 @@ from sympy.external import import_module
 from sympy.functions.elementary.exponential import log
 from sympy.functions.elementary.integers import floor, ceiling
 from sympy.functions.elementary.miscellaneous import (sqrt, cbrt, root, Min,
-                                                      Max, real_root)
+                                                      Max, real_root, Rem)
 from sympy.functions.elementary.trigonometric import cos, sin
 from sympy.functions.special.delta_functions import Heaviside
 
 from sympy.utilities.lambdify import lambdify
-from sympy.utilities.pytest import raises, skip, ignore_warnings
+from sympy.testing.pytest import raises, skip, ignore_warnings
 
 def test_Min():
     from sympy.abc import x, y, z
@@ -30,19 +31,19 @@ def test_Min():
     r = Symbol('r', real=True)
 
     assert Min(5, 4) == 4
-    assert Min(-oo, -oo) == -oo
-    assert Min(-oo, n) == -oo
-    assert Min(n, -oo) == -oo
-    assert Min(-oo, np) == -oo
-    assert Min(np, -oo) == -oo
-    assert Min(-oo, 0) == -oo
-    assert Min(0, -oo) == -oo
-    assert Min(-oo, nn) == -oo
-    assert Min(nn, -oo) == -oo
-    assert Min(-oo, p) == -oo
-    assert Min(p, -oo) == -oo
-    assert Min(-oo, oo) == -oo
-    assert Min(oo, -oo) == -oo
+    assert Min(-oo, -oo) is -oo
+    assert Min(-oo, n) is -oo
+    assert Min(n, -oo) is -oo
+    assert Min(-oo, np) is -oo
+    assert Min(np, -oo) is -oo
+    assert Min(-oo, 0) is -oo
+    assert Min(0, -oo) is -oo
+    assert Min(-oo, nn) is -oo
+    assert Min(nn, -oo) is -oo
+    assert Min(-oo, p) is -oo
+    assert Min(p, -oo) is -oo
+    assert Min(-oo, oo) is -oo
+    assert Min(oo, -oo) is -oo
     assert Min(n, n) == n
     assert unchanged(Min, n, np)
     assert Min(np, n) == Min(n, np)
@@ -78,7 +79,7 @@ def test_Min():
     assert Min(p, p) == p
     assert Min(p, oo) == p
     assert Min(oo, p) == p
-    assert Min(oo, oo) == oo
+    assert Min(oo, oo) is oo
 
     assert Min(n, n_).func is Min
     assert Min(nn, nn_).func is Min
@@ -86,7 +87,7 @@ def test_Min():
     assert Min(p, p_).func is Min
 
     # lists
-    assert Min() == S.Infinity
+    assert Min() is S.Infinity
     assert Min(x) == x
     assert Min(x, y) == Min(y, x)
     assert Min(x, y, z) == Min(z, y, x)
@@ -101,7 +102,7 @@ def test_Min():
     assert unchanged(Min, sin(x), cos(x))
     assert Min(sin(x), cos(x)) == Min(cos(x), sin(x))
     assert Min(cos(x), sin(x)).subs(x, 1) == cos(1)
-    assert Min(cos(x), sin(x)).subs(x, S(1)/2) == sin(S(1)/2)
+    assert Min(cos(x), sin(x)).subs(x, S.Half) == sin(S.Half)
     raises(ValueError, lambda: Min(cos(x), sin(x)).subs(x, I))
     raises(ValueError, lambda: Min(I))
     raises(ValueError, lambda: Min(I, x))
@@ -118,7 +119,6 @@ def test_Min():
 
     # issue 7233
     e = Min(0, x)
-    assert e.evalf == e.n
     assert e.n().args == (0, x)
 
     # issue 8643
@@ -156,7 +156,7 @@ def test_Max():
 
     # lists
 
-    assert Max() == S.NegativeInfinity
+    assert Max() is S.NegativeInfinity
     assert Max(x) == x
     assert Max(x, y) == Max(y, x)
     assert Max(x, y, z) == Max(z, y, x)
@@ -170,7 +170,7 @@ def test_Max():
     assert Max(1000, 100, -100, x, p, n) == Max(p, x, 1000)
     assert Max(cos(x), sin(x)) == Max(sin(x), cos(x))
     assert Max(cos(x), sin(x)).subs(x, 1) == sin(1)
-    assert Max(cos(x), sin(x)).subs(x, S(1)/2) == cos(S(1)/2)
+    assert Max(cos(x), sin(x)).subs(x, S.Half) == cos(S.Half)
     raises(ValueError, lambda: Max(cos(x), sin(x)).subs(x, I))
     raises(ValueError, lambda: Max(I))
     raises(ValueError, lambda: Max(I, x))
@@ -185,7 +185,6 @@ def test_Max():
         + Heaviside(x - Max(1, x**2) + 1)
 
     e = Max(0, x)
-    assert e.evalf == e.n
     assert e.n().args == (0, x)
 
     # issue 8643
@@ -326,17 +325,17 @@ def test_real_root():
     r3 = root(-1, 4)
     assert real_root(r1 + r2 + r3) == -1 + r2 + r3
     assert real_root(root(-2, 3)) == -root(2, 3)
-    assert real_root(-8., 3) == -2
+    assert real_root(-8., 3) == -2.0
     x = Symbol('x')
     n = Symbol('n')
     g = real_root(x, n)
-    assert g.subs(dict(x=-8, n=3)) == -2
-    assert g.subs(dict(x=8, n=3)) == 2
+    assert g.subs({"x": -8, "n": 3}) == -2
+    assert g.subs({"x": 8, "n": 3}) == 2
     # give principle root if there is no real root -- if this is not desired
     # then maybe a Root class is needed to raise an error instead
-    assert g.subs(dict(x=I, n=3)) == cbrt(I)
-    assert g.subs(dict(x=-8, n=2)) == sqrt(-8)
-    assert g.subs(dict(x=I, n=2)) == sqrt(I)
+    assert g.subs({"x": I, "n": 3}) == cbrt(I)
+    assert g.subs({"x": -8, "n": 2}) == sqrt(-8)
+    assert g.subs({"x": I, "n": 2}) == sqrt(I)
 
 
 def test_issue_11463():
@@ -371,7 +370,8 @@ def test_rewrite_MaxMin_as_Heaviside():
 
 
 def test_rewrite_MaxMin_as_Piecewise():
-    from sympy import symbols, Piecewise
+    from sympy.core.symbol import symbols
+    from sympy.functions.elementary.piecewise import Piecewise
     x, y, z, a, b = symbols('x y z a b', real=True)
     vx, vy, va = symbols('vx vy va')
     assert Max(a, b).rewrite(Piecewise) == Piecewise((a, a >= b), (b, True))
@@ -397,7 +397,7 @@ def test_issue_11099():
     assert Max(x, y).evalf(subs=fixed_test_data) == \
         Max(x, y).subs(fixed_test_data).evalf()
     # randomly generate some test data
-    from random import randint
+    from sympy.core.random import randint
     for i in range(20):
         random_test_data = {x: randint(-100, 100), y: randint(-100, 100)}
         assert Min(x, y).evalf(subs=random_test_data) == \
@@ -412,14 +412,18 @@ def test_issue_12638():
     assert Min(a, b, Max(a, b, c)) == Min(a, b)
     assert Min(a, b, Max(a, c)) == Min(a, b)
 
+def test_issue_21399():
+    from sympy.abc import a, b, c
+    assert Max(Min(a, b), Min(a, b, c)) == Min(a, b)
+
 
 def test_instantiation_evaluation():
     from sympy.abc import v, w, x, y, z
     assert Min(1, Max(2, x)) == 1
     assert Max(3, Min(2, x)) == 3
     assert Min(Max(x, y), Max(x, z)) == Max(x, Min(y, z))
-    assert set(Min(Max(w, x), Max(y, z)).args) == set(
-        [Max(w, x), Max(y, z)])
+    assert set(Min(Max(w, x), Max(y, z)).args) == {
+        Max(w, x), Max(y, z)}
     assert Min(Max(x, y), Max(x, z), w) == Min(
         w, Max(x, Min(y, z)))
     A, B = Min, Max
@@ -453,7 +457,49 @@ def test_issue_14000():
 
     assert sqrt(4, evaluate=False) == Pow(4, S.Half, evaluate=False)
     assert cbrt(3.5, evaluate=False) == Pow(3.5, Rational(1, 3), evaluate=False)
-    assert root(4, 2, evaluate=False) == Pow(4, Rational(1, 2), evaluate=False)
+    assert root(4, 2, evaluate=False) == Pow(4, S.Half, evaluate=False)
 
     assert root(16, 4, 2, evaluate=False).has(Pow) == True
     assert real_root(-8, 3, evaluate=False).has(Pow) == True
+
+def test_issue_6899():
+    from sympy.core.function import Lambda
+    x = Symbol('x')
+    eqn = Lambda(x, x)
+    assert eqn.func(*eqn.args) == eqn
+
+def test_Rem():
+    from sympy.abc import x, y
+    assert Rem(5, 3) == 2
+    assert Rem(-5, 3) == -2
+    assert Rem(5, -3) == 2
+    assert Rem(-5, -3) == -2
+    assert Rem(x**3, y) == Rem(x**3, y)
+    assert Rem(Rem(-5, 3) + 3, 3) == 1
+
+
+def test_minmax_no_evaluate():
+    from sympy import evaluate
+    p = Symbol('p', positive=True)
+
+    assert Max(1, 3) == 3
+    assert Max(1, 3).args == ()
+    assert Max(0, p) == p
+    assert Max(0, p).args == ()
+    assert Min(0, p) == 0
+    assert Min(0, p).args == ()
+
+    assert Max(1, 3, evaluate=False) != 3
+    assert Max(1, 3, evaluate=False).args == (1, 3)
+    assert Max(0, p, evaluate=False) != p
+    assert Max(0, p, evaluate=False).args == (0, p)
+    assert Min(0, p, evaluate=False) != 0
+    assert Min(0, p, evaluate=False).args == (0, p)
+
+    with evaluate(False):
+        assert Max(1, 3) != 3
+        assert Max(1, 3).args == (1, 3)
+        assert Max(0, p) != p
+        assert Max(0, p).args == (0, p)
+        assert Min(0, p) != 0
+        assert Min(0, p).args == (0, p)

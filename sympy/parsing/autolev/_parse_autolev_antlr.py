@@ -1,13 +1,14 @@
-import sys
+from __future__ import annotations
+from importlib.metadata import version
 from sympy.external import import_module
 
 
 autolevparser = import_module('sympy.parsing.autolev._antlr.autolevparser',
-                              __import__kwargs={'fromlist': ['AutolevParser']})
+                              import_kwargs={'fromlist': ['AutolevParser']})
 autolevlexer = import_module('sympy.parsing.autolev._antlr.autolevlexer',
-                             __import__kwargs={'fromlist': ['AutolevLexer']})
+                             import_kwargs={'fromlist': ['AutolevLexer']})
 autolevlistener = import_module('sympy.parsing.autolev._antlr.autolevlistener',
-                                __import__kwargs={'fromlist': ['AutolevListener']})
+                                import_kwargs={'fromlist': ['AutolevListener']})
 
 AutolevParser = getattr(autolevparser, 'AutolevParser', None)
 AutolevLexer = getattr(autolevlexer, 'AutolevLexer', None)
@@ -15,17 +16,16 @@ AutolevListener = getattr(autolevlistener, 'AutolevListener', None)
 
 
 def parse_autolev(autolev_code, include_numeric):
-    antlr4 = import_module('antlr4', warn_not_installed=True)
-    if not antlr4:
-        raise ImportError("Autolev parsing requires the antlr4 python package,"
-                          " provided by pip (antlr4-python2-runtime or"
-                          " antlr4-python3-runtime) or"
-                          " conda (antlr-python-runtime)")
-    try:
-        l = autolev_code.readlines()
-        input_stream = antlr4.InputStream("".join(l))
-    except Exception:
-        input_stream = antlr4.InputStream(autolev_code)
+    antlr4 = import_module('antlr4')
+    if not antlr4 or not version('antlr4-python3-runtime').startswith('4.11'):
+        raise ImportError("Autolev parsing requires the antlr4 Python package,"
+                          " provided by pip (antlr4-python3-runtime)"
+                          " conda (antlr-python-runtime), version 4.11")
+
+    if not isinstance(autolev_code, str):
+        autolev_code = "".join(autolev_code.readlines())
+
+    input_stream = antlr4.InputStream(autolev_code)
 
     if AutolevListener:
         from ._listener_autolev_antlr import MyListener

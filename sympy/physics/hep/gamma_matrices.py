@@ -25,16 +25,19 @@
     metric(LorentzIndex,LorentzIndex)
 
 """
-from sympy import S, Mul, eye, trace
+from __future__ import annotations
+from sympy.core.mul import Mul
+from sympy.core.singleton import S
+from sympy.matrices.dense import eye
+from sympy.matrices.expressions.trace import trace
 from sympy.tensor.tensor import TensorIndexType, TensorIndex,\
     TensMul, TensAdd, tensor_mul, Tensor, TensorHead, TensorSymmetry
-from sympy.core.compatibility import range
 
 
-# DiracSpinorIndex = TensorIndexType('DiracSpinorIndex', dim=4, dummy_fmt="S")
+# DiracSpinorIndex = TensorIndexType('DiracSpinorIndex', dim=4, dummy_name="S")
 
 
-LorentzIndex = TensorIndexType('LorentzIndex', dim=4, dummy_fmt="L")
+LorentzIndex = TensorIndexType('LorentzIndex', dim=4, dummy_name="L")
 
 
 GammaMatrix = TensorHead("GammaMatrix", [LorentzIndex],
@@ -188,7 +191,7 @@ def gamma_trace(t):
 
     """
     if isinstance(t, TensAdd):
-        res = TensAdd(*[_trace_single_line(x) for x in t.args])
+        res = TensAdd(*[gamma_trace(x) for x in t.args])
         return res
     t = _simplify_single_line(t)
     res = _trace_single_line(t)
@@ -483,9 +486,7 @@ def kahane_simplify(expression):
     # All values in `links` are integers, negative numbers are used in the case
     # where it is necessary to insert gamma matrices between free indices, in
     # order to make Kahane's algorithm work (see paper).
-    links = dict()
-    for i in range(first_dum_pos, total_number):
-        links[i] = []
+    links = {i: [] for i in range(first_dum_pos, total_number)}
 
     # `cum_sign` is a step variable to mark the sign of every index, see paper.
     cum_sign = -1
@@ -694,8 +695,7 @@ def kahane_simplify(expression):
 
     # If `first_dum_pos` is not zero, it means that there are trailing free gamma
     # matrices in front of `expression`, so multiply by them:
-    for i in range(0, first_dum_pos):
-        [ri.insert(0, free_pos[i]) for ri in resulting_indices]
+    resulting_indices = [ free_pos[0:first_dum_pos] + ri for ri in resulting_indices ]
 
     resulting_expr = S.Zero
     for i in resulting_indices:

@@ -1,9 +1,6 @@
-from __future__ import print_function, division
-
 import pyglet.gl as pgl
 
 from sympy.core import S
-from sympy.core.compatibility import range
 from sympy.plotting.pygletplot.plot_mode_base import PlotModeBase
 
 
@@ -16,19 +13,19 @@ class PlotSurface(PlotModeBase):
         self.u_set = list(self.u_interval.frange())
         self.v_interval = self.intervals[1]
         self.v_set = list(self.v_interval.frange())
-        self.bounds = [[S.Infinity, -S.Infinity, 0],
-                       [S.Infinity, -S.Infinity, 0],
-                       [S.Infinity, -S.Infinity, 0]]
+        self.bounds = [[S.Infinity, S.NegativeInfinity, 0],
+                       [S.Infinity, S.NegativeInfinity, 0],
+                       [S.Infinity, S.NegativeInfinity, 0]]
         evaluate = self._get_evaluator()
 
         self._calculating_verts_pos = 0.0
         self._calculating_verts_len = float(
             self.u_interval.v_len*self.v_interval.v_len)
 
-        verts = list()
+        verts = []
         b = self.bounds
         for u in self.u_set:
-            column = list()
+            column = []
             for v in self.v_set:
                 try:
                     _e = evaluate(u, v)  # calculate vertex

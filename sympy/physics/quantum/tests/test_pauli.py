@@ -1,11 +1,15 @@
-from sympy import I, Mul, latex, Matrix
+from __future__ import annotations
+from sympy.core.mul import Mul
+from sympy.core.numbers import I
+from sympy.matrices.dense import Matrix
+from sympy.printing.latex import latex
 from sympy.physics.quantum import (Dagger, Commutator, AntiCommutator, qapply,
                                    Operator, represent)
 from sympy.physics.quantum.pauli import (SigmaOpBase, SigmaX, SigmaY, SigmaZ,
                                          SigmaMinus, SigmaPlus,
                                          qsimplify_pauli)
 from sympy.physics.quantum.pauli import SigmaZKet, SigmaZBra
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 
 
 sx, sy, sz = SigmaX(), SigmaY(), SigmaZ()
@@ -149,8 +153,13 @@ def test_printing():
 
 
 def test_represent():
-    represent(sx) == Matrix([[0, 1], [1, 0]])
-    represent(sy) == Matrix([[0, -I], [I, 0]])
-    represent(sz) == Matrix([[1, 0], [0, -1]])
-    represent(sm) == Matrix([[0, 0], [1, 0]])
-    represent(sp) == Matrix([[0, 1], [0, 0]])
+    assert represent(sx) == Matrix([[0, 1], [1, 0]])
+    assert represent(sy) == Matrix([[0, -I], [I, 0]])
+    assert represent(sz) == Matrix([[1, 0], [0, -1]])
+    assert represent(sm) == Matrix([[0, 0], [1, 0]])
+    assert represent(sp) == Matrix([[0, 1], [0, 0]])
+
+
+def test_is_annihilation():
+    assert sm.is_annihilation is True
+    assert sp.is_annihilation is False

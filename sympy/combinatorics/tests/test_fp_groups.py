@@ -1,10 +1,11 @@
-from sympy import S
+from __future__ import annotations
+from sympy.core.singleton import S
 from sympy.combinatorics.fp_groups import (FpGroup, low_index_subgroups,
                                    reidemeister_presentation, FpSubgroup,
                                            simplify_presentation)
 from sympy.combinatorics.free_groups import (free_group, FreeGroup)
 
-from sympy.utilities.pytest import slow
+from sympy.testing.pytest import slow
 
 """
 References
@@ -155,7 +156,7 @@ def test_order():
     assert f.order() == 8
 
     f = FpGroup(F, [x*y*x**-1*y**-1, y**2])
-    assert f.order() == S.Infinity
+    assert f.order() is S.Infinity
 
     F, a, b, c = free_group("a, b, c")
     f = FpGroup(F, [a**250, b**2, c*b*c**-1*b, c**4, c**-1*a**-1*c*a, a**-1*b**-1*a*b])
@@ -163,7 +164,7 @@ def test_order():
 
     F, x = free_group("x")
     f = FpGroup(F, [])
-    assert f.order() == S.Infinity
+    assert f.order() is S.Infinity
 
     f = FpGroup(free_group('')[0], [])
     assert f.order() == 1
@@ -195,8 +196,31 @@ def test_fp_subgroup():
     S = FpSubgroup(f, H)
     _test_subgroup(K, T, S)
 
+    F, x, y = free_group("x, y")
+    H = FpSubgroup(F, [x*y, x])
+    assert x in H
+
+    F, a, b, c = free_group("a, b, c")
+    w1 = a*b
+    w2 = b**-1 * c * b
+    w3 = b**-1 * c**-1
+    H = FpSubgroup(F, [w1, w2, w3])
+    assert a in H
+
+    F, a, b = free_group("a, b")
+    H = FpSubgroup(F, [b])
+    assert not (a in H)
+
+    F, a, b = free_group("a, b")
+    G = FpGroup(F, [a**2, b**2, (a*b)**2])
+    H = FpSubgroup(G, [a], normal=True)
+    assert a in H
+    assert b not in H
+    H_free = FpSubgroup(F, [a], normal=True)
+    assert b**-1*a*b in H_free
+    assert b**3*a*b not in H_free
+
 def test_permutation_methods():
-    from sympy.combinatorics.fp_groups import FpSubgroup
     F, x, y = free_group("x, y")
     # DihedralGroup(8)
     G = FpGroup(F, [x**2, y**8, x*y*x**-1*y])
@@ -232,6 +256,11 @@ def test_simplify_presentation():
     assert not G.generators
     assert not G.relators
 
+    # CyclicGroup(3)
+    # The second generator in <x, y | x^2, x^5, y^3> is trivial due to relators {x^2, x^5}
+    F, x, y = free_group("x, y")
+    G = simplify_presentation(FpGroup(F, [x**2, x**5, y**3]))
+    assert x in G.relators
 
 def test_cyclic():
     F, x, y = free_group("x, y")

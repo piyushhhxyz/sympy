@@ -1,15 +1,20 @@
+from __future__ import annotations
 from sympy.core import I, symbols, Basic, Mul, S
+from sympy.core.mul import mul
 from sympy.functions import adjoint, transpose
+from sympy.matrices.exceptions import ShapeError
 from sympy.matrices import (Identity, Inverse, Matrix, MatrixSymbol, ZeroMatrix,
         eye, ImmutableMatrix)
 from sympy.matrices.expressions import Adjoint, Transpose, det, MatPow
-from sympy.matrices.expressions.matexpr import GenericIdentity
+from sympy.matrices.expressions.special import GenericIdentity
 from sympy.matrices.expressions.matmul import (factor_in_front, remove_ids,
-        MatMul, xxinv, any_zeros, unpack, only_squares)
+        MatMul, combine_powers, any_zeros, unpack, only_squares)
 from sympy.strategies import null_safe
-from sympy import refine, Q, Symbol
+from sympy.assumptions.ask import Q
+from sympy.assumptions.refine import refine
+from sympy.core.symbol import Symbol
 
-from sympy.utilities.pytest import XFAIL
+from sympy.testing.pytest import XFAIL, raises
 
 n, m, l, k = symbols('n m l k', integer=True)
 x = symbols('x')
@@ -19,6 +24,8 @@ C = MatrixSymbol('C', n, n)
 D = MatrixSymbol('D', n, n)
 E = MatrixSymbol('E', m, n)
 
+def test_evaluate():
+    assert MatMul(C, C, evaluate=True) == MatMul(C, C).doit()
 
 def test_adjoint():
     assert adjoint(A*B) == Adjoint(B)*Adjoint(A)
@@ -57,9 +64,13 @@ def test_remove_ids():
                                  MatMul(Identity(n), evaluate=False)
 
 
-def test_xxinv():
-    assert xxinv(MatMul(D, Inverse(D), D, evaluate=False)) == \
+def test_combine_powers():
+    assert combine_powers(MatMul(D, Inverse(D), D, evaluate=False)) == \
                  MatMul(Identity(n), D, evaluate=False)
+    assert combine_powers(MatMul(B.T, Inverse(E*A), E, A, B, evaluate=False)) == \
+        MatMul(B.T, Identity(m), B, evaluate=False)
+    assert combine_powers(MatMul(A, E, Inverse(A*E), D, evaluate=False)) == \
+        MatMul(Identity(n), D, evaluate=False)
 
 
 def test_any_zeros():
@@ -151,6 +162,33 @@ def test_construction_with_Mul():
     assert Mul(C, D) == MatMul(C, D)
     assert Mul(D, C) == MatMul(D, C)
 
+def test_construction_with_mul():
+    assert mul(C, D) == MatMul(C, D)
+    assert mul(D, C) == MatMul(D, C)
+    assert mul(C, D) != MatMul(D, C)
+
 def test_generic_identity():
     assert MatMul.identity == GenericIdentity()
     assert MatMul.identity != S.One
+
+
+def test_issue_23519():
+    N = Symbol("N", integer=True)
+    M1 = MatrixSymbol("M1", N, N)
+    M2 = MatrixSymbol("M2", N, N)
+    I = Identity(N)
+    z = (M2 + 2 * (M2 + I) * M1 + I)
+    assert z.coeff(M1) == 2*I + 2*M2
+
+
+def test_shape_error():
+    A = MatrixSymbol('A', 2, 2)
+    B = MatrixSymbol('B', 3, 3)
+    raises(ShapeError, lambda: MatMul(A, B))
+
+
+def test_matmul_transpose():
+    # https://github.com/sympy/sympy/issues/9503
+    M = Matrix(2, 2, [1, 2 + I, 3, 4])
+    a = Symbol('a')
+    assert (MatMul(a, M).T).expand() == (a*Matrix([[1, 3],[2 + I, 4]])).expand()

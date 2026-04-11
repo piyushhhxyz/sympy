@@ -1,7 +1,8 @@
+from __future__ import annotations
 from sympy.categories.diagram_drawing import _GrowableGrid, ArrowStringDescription
 from sympy.categories import (DiagramGrid, Object, NamedMorphism,
                               Diagram, XypicDiagramDrawer, xypic_draw_diagram)
-from sympy import FiniteSet
+from sympy.sets.sets import FiniteSet
 
 
 def test_GrowableGrid():

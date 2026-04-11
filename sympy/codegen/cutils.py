@@ -1,4 +1,5 @@
-from sympy.printing.ccode import C99CodePrinter
+from __future__ import annotations
+from sympy.printing.c import C99CodePrinter
 
 def render_as_source_file(content, Printer=C99CodePrinter, settings=None):
     """ Renders a C source file (with required #include statements) """

@@ -1,17 +1,23 @@
+from __future__ import annotations
 from copy import copy
 
 from sympy.tensor.array.dense_ndim_array import ImmutableDenseNDimArray
-from sympy import Symbol, Rational, SparseMatrix, Dict, diff, symbols, Indexed, IndexedBase, S
-from sympy.core.compatibility import long
+from sympy.core.containers import Dict
+from sympy.core.function import diff
+from sympy.core.numbers import Rational
+from sympy.core.singleton import S
+from sympy.core.symbol import (Symbol, symbols)
+from sympy.matrices import SparseMatrix
+from sympy.tensor.indexed import (Indexed, IndexedBase)
 from sympy.matrices import Matrix
 from sympy.tensor.array.sparse_ndim_array import ImmutableSparseNDimArray
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 
 
 def test_ndim_array_initiation():
     arr_with_no_elements = ImmutableDenseNDimArray([], shape=(0,))
     assert len(arr_with_no_elements) == 0
-    assert arr_with_no_elements.rank() == 1
+    assert arr_with_no_elements.ndim == 1
 
     raises(ValueError, lambda: ImmutableDenseNDimArray([0], shape=(0,)))
     raises(ValueError, lambda: ImmutableDenseNDimArray([1, 2, 3], shape=(0,)))
@@ -25,42 +31,42 @@ def test_ndim_array_initiation():
     assert len(arr_with_one_element) == 1
     assert arr_with_one_element[0] == 23
     assert arr_with_one_element[:] == ImmutableDenseNDimArray([23])
-    assert arr_with_one_element.rank() == 1
+    assert arr_with_one_element.ndim == 1
 
     arr_with_symbol_element = ImmutableDenseNDimArray([Symbol('x')])
     assert len(arr_with_symbol_element) == 1
     assert arr_with_symbol_element[0] == Symbol('x')
     assert arr_with_symbol_element[:] == ImmutableDenseNDimArray([Symbol('x')])
-    assert arr_with_symbol_element.rank() == 1
+    assert arr_with_symbol_element.ndim == 1
 
     number5 = 5
     vector = ImmutableDenseNDimArray.zeros(number5)
     assert len(vector) == number5
     assert vector.shape == (number5,)
-    assert vector.rank() == 1
+    assert vector.ndim == 1
 
     vector = ImmutableSparseNDimArray.zeros(number5)
     assert len(vector) == number5
     assert vector.shape == (number5,)
     assert vector._sparse_array == Dict()
-    assert vector.rank() == 1
+    assert vector.ndim == 1
 
     n_dim_array = ImmutableDenseNDimArray(range(3**4), (3, 3, 3, 3,))
     assert len(n_dim_array) == 3 * 3 * 3 * 3
     assert n_dim_array.shape == (3, 3, 3, 3)
-    assert n_dim_array.rank() == 4
+    assert n_dim_array.ndim == 4
 
     array_shape = (3, 3, 3, 3)
     sparse_array = ImmutableSparseNDimArray.zeros(*array_shape)
     assert len(sparse_array._sparse_array) == 0
     assert len(sparse_array) == 3 * 3 * 3 * 3
     assert n_dim_array.shape == array_shape
-    assert n_dim_array.rank() == 4
+    assert n_dim_array.ndim == 4
 
     one_dim_array = ImmutableDenseNDimArray([2, 3, 1])
     assert len(one_dim_array) == 3
     assert one_dim_array.shape == (3,)
-    assert one_dim_array.rank() == 1
+    assert one_dim_array.ndim == 1
     assert one_dim_array.tolist() == [2, 3, 1]
 
     shape = (3, 3)
@@ -68,27 +74,27 @@ def test_ndim_array_initiation():
     assert len(array_with_many_args) == 3 * 3
     assert array_with_many_args.shape == shape
     assert array_with_many_args[0, 0] == 0
-    assert array_with_many_args.rank() == 2
+    assert array_with_many_args.ndim == 2
 
-    shape = (long(3), long(3))
+    shape = (int(3), int(3))
     array_with_long_shape = ImmutableSparseNDimArray.zeros(*shape)
     assert len(array_with_long_shape) == 3 * 3
     assert array_with_long_shape.shape == shape
-    assert array_with_long_shape[long(0), long(0)] == 0
-    assert array_with_long_shape.rank() == 2
+    assert array_with_long_shape[int(0), int(0)] == 0
+    assert array_with_long_shape.ndim == 2
 
-    vector_with_long_shape = ImmutableDenseNDimArray(range(5), long(5))
+    vector_with_long_shape = ImmutableDenseNDimArray(range(5), int(5))
     assert len(vector_with_long_shape) == 5
-    assert vector_with_long_shape.shape == (long(5),)
-    assert vector_with_long_shape.rank() == 1
-    raises(ValueError, lambda: vector_with_long_shape[long(5)])
+    assert vector_with_long_shape.shape == (int(5),)
+    assert vector_with_long_shape.ndim == 1
+    raises(ValueError, lambda: vector_with_long_shape[int(5)])
 
     from sympy.abc import x
     for ArrayType in [ImmutableDenseNDimArray, ImmutableSparseNDimArray]:
         rank_zero_array = ArrayType(x)
         assert len(rank_zero_array) == 1
         assert rank_zero_array.shape == ()
-        assert rank_zero_array.rank() == 0
+        assert rank_zero_array.ndim == 0
         assert rank_zero_array[()] == x
         raises(ValueError, lambda: rank_zero_array[0])
 
@@ -96,12 +102,17 @@ def test_ndim_array_initiation():
 def test_reshape():
     array = ImmutableDenseNDimArray(range(50), 50)
     assert array.shape == (50,)
-    assert array.rank() == 1
+    assert array.ndim == 1
 
     array = array.reshape(5, 5, 2)
     assert array.shape == (5, 5, 2)
-    assert array.rank() == 3
+    assert array.ndim == 3
     assert len(array) == 50
+
+    from sympy.testing.pytest import warns_deprecated_sympy
+
+    with warns_deprecated_sympy():
+        assert array.rank() == 3
 
 
 def test_getitem():
@@ -124,14 +135,12 @@ def test_getitem():
 
 def test_iterator():
     array = ImmutableDenseNDimArray(range(4), (2, 2))
-    array[0] == ImmutableDenseNDimArray([0, 1])
-    array[1] == ImmutableDenseNDimArray([2, 3])
+    assert array[0] == ImmutableDenseNDimArray([0, 1])
+    assert array[1] == ImmutableDenseNDimArray([2, 3])
 
     array = array.reshape(4)
-    j = 0
-    for i in array:
+    for j, i in enumerate(array):
         assert i == j
-        j += 1
 
 
 def test_sparse():
@@ -165,8 +174,8 @@ def test_sparse():
     assert a * 0 == ImmutableSparseNDimArray({}, (100000, 200000))
     assert 0 * a == ImmutableSparseNDimArray({}, (100000, 200000))
 
-    # __div__
-    assert a/3 == ImmutableSparseNDimArray({200001: S.One/3}, (100000, 200000))
+    # __truediv__
+    assert a/3 == ImmutableSparseNDimArray({200001: Rational(1, 3)}, (100000, 200000))
 
     # __neg__
     assert -a == ImmutableSparseNDimArray({200001: -1}, (100000, 200000))
@@ -196,7 +205,7 @@ def test_ndim_array_converting():
     dense_array = ImmutableDenseNDimArray([1, 2, 3, 4], (2, 2))
     alist = dense_array.tolist()
 
-    alist == [[1, 2], [3, 4]]
+    assert alist == [[1, 2], [3, 4]]
 
     matrix = dense_array.tomatrix()
     assert (isinstance(matrix, Matrix))
@@ -439,3 +448,9 @@ def test_issue_12665():
 def test_zeros_without_shape():
     arr = ImmutableDenseNDimArray.zeros()
     assert arr == ImmutableDenseNDimArray(0)
+
+def test_issue_21870():
+    a0 = ImmutableDenseNDimArray(0)
+    assert a0.ndim == 0
+    a1 = ImmutableDenseNDimArray(a0)
+    assert a1.ndim == 0

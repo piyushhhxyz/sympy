@@ -1,16 +1,16 @@
-from sympy.core.compatibility import range
-from sympy.combinatorics.perm_groups import (PermutationGroup,
-    _orbit_transversal)
+from __future__ import annotations
+from sympy.core.containers import Tuple
+from sympy.combinatorics.generators import rubik_cube_generators
+from sympy.combinatorics.homomorphisms import is_isomorphic
 from sympy.combinatorics.named_groups import SymmetricGroup, CyclicGroup,\
     DihedralGroup, AlternatingGroup, AbelianGroup, RubikGroup
+from sympy.combinatorics.perm_groups import (PermutationGroup,
+    _orbit_transversal, Coset, SymmetricPermutationGroup)
 from sympy.combinatorics.permutations import Permutation
-from sympy.utilities.pytest import skip, XFAIL
-from sympy.combinatorics.generators import rubik_cube_generators
 from sympy.combinatorics.polyhedron import tetrahedron as Tetra, cube
 from sympy.combinatorics.testutil import _verify_bsgs, _verify_centralizer,\
     _verify_normal_closure
-from sympy.utilities.pytest import slow
-from sympy.combinatorics.homomorphisms import is_isomorphic
+from sympy.testing.pytest import skip, XFAIL, slow
 
 rmul = Permutation.rmul
 
@@ -32,6 +32,9 @@ def test_has():
     b = Permutation([0, 2, 1, 3, 4])
     assert PermutationGroup(a, b).degree == \
         PermutationGroup(a, b).degree == 6
+
+    g = PermutationGroup(Permutation(0, 2, 1))
+    assert Tuple(1, g).has(g)
 
 
 def test_generate():
@@ -65,6 +68,57 @@ def test_order():
     assert PermutationGroup().order() == 1
 
 
+def test_molien():
+    from sympy.abc import t
+    G = PermutationGroup()
+    assert G.molien() == 1
+    assert G.molien(t) == 1
+
+    C3 = CyclicGroup(3)
+    assert C3.molien() == 2*(1 - t**3)**(-1)/3 + (1 - t)**(-3)/3
+
+    S3 = SymmetricGroup(3)
+    assert S3.molien() == (2*(1 - t**3)**(-1) + 3/((1 - t)*(1 - t**2)) + (1 - t)**(-3))/6
+    assert S3.molien(t) == (2*(1 - t**3)**(-1) + 3/((1 - t)*(1 - t**2)) + (1 - t)**(-3))/6
+
+    G = PermutationGroup(Permutation(5))
+    assert G.molien() == 1/(1 - t)**6
+
+
+def test_identity_generators_dups_false():
+    identity = Permutation(3)
+    G = PermutationGroup(identity, identity, dups=False)
+    assert len(G.generators) == 1
+    assert G.generators[0].is_identity
+    assert G.order() == 1
+
+
+def test_property_aliasing():
+    G = SymmetricGroup(4)
+    base = G.base
+    base.append(99)
+    assert G.base == [0, 1, 2]
+
+    orbits = G.basic_orbits
+    orbits[0].append(99)
+    assert G.basic_orbits == [[0, 1, 2, 3], [1, 2, 3], [2, 3]]
+
+    transversals = G.basic_transversals
+    transversals[0][99] = Permutation(3)
+    assert 99 not in G.basic_transversals[0]
+
+    H = PermutationGroup(Permutation([1, 0, 2]), Permutation([0, 2, 1]))
+    gens = H.generators
+    gens.pop()
+    assert len(H.generators) == 2
+    assert H.order() == 6
+
+    expected = len(G.strong_gens)
+    strong_gens = G.strong_gens
+    strong_gens.pop()
+    assert len(G.strong_gens) == expected
+
+
 def test_equality():
     p_1 = Permutation(0, 1, 3)
     p_2 = Permutation(0, 2, 3)
@@ -73,10 +127,14 @@ def test_equality():
     g_1 = PermutationGroup(p_1, p_2)
     g_2 = PermutationGroup(p_3, p_4)
     g_3 = PermutationGroup(p_2, p_1)
+    g_4 = PermutationGroup(p_1, p_2)
 
-    assert g_1 == g_2
+    assert g_1 != g_2
     assert g_1.generators != g_2.generators
-    assert g_1 == g_3
+    assert g_1.equals(g_2)
+    assert g_1 != g_3
+    assert g_1.equals(g_3)
+    assert g_1 == g_4
 
 
 def test_stabilizer():
@@ -189,13 +247,12 @@ def test_coset_rank():
     gens = [Permutation(p) for p in gens_cube]
     G = PermutationGroup(gens)
     i = 0
-    for h in G.generate(af=True):
+    for i, h in enumerate(G.generate(af=True)):
         rk = G.coset_rank(h)
         assert rk == i
         h1 = G.coset_unrank(rk, af=True)
         assert h == h1
-        i += 1
-    assert G.coset_unrank(48) == None
+    assert G.coset_unrank(48) is None
     assert G.coset_unrank(G.coset_rank(gens[0])) == gens[0]
 
 
@@ -305,6 +362,14 @@ def test_is_normal():
     assert H_id.is_normal(H)
     assert not H_n2_1.is_normal(H)
     assert not H_n2_2.is_normal(H)
+
+
+def test_is_normal_after_is_abelian():
+    G = SymmetricGroup(3)#PermutationGroup(Permutation([1, 2, 0]), Permutation([1, 0, 2]))
+    H = PermutationGroup(Permutation([1, 0, 2]))
+
+    assert H.is_abelian is True
+    assert H.is_normal(G) is False
 
 
 def test_eq():
@@ -437,7 +502,15 @@ def test_random_pr():
 def test_is_alt_sym():
     G = DihedralGroup(10)
     assert G.is_alt_sym() is False
+    assert G._eval_is_alt_sym_naive() is False
+    assert G._eval_is_alt_sym_naive(only_alt=True) is False
+    assert G._eval_is_alt_sym_naive(only_sym=True) is False
+
     S = SymmetricGroup(10)
+    assert S._eval_is_alt_sym_naive() is True
+    assert S._eval_is_alt_sym_naive(only_alt=True) is False
+    assert S._eval_is_alt_sym_naive(only_sym=True) is True
+
     N_eps = 10
     _random_prec = {'N_eps': N_eps,
         0: Permutation([[2], [1, 4], [0, 6, 7, 8, 9, 3, 5]]),
@@ -451,7 +524,12 @@ def test_is_alt_sym():
         8: Permutation([[1, 5, 6, 3], [0, 2, 7, 8, 4, 9]]),
         9: Permutation([[8], [6, 7], [2, 3, 4, 5], [0, 1, 9]])}
     assert S.is_alt_sym(_random_prec=_random_prec) is True
+
     A = AlternatingGroup(10)
+    assert A._eval_is_alt_sym_naive() is True
+    assert A._eval_is_alt_sym_naive(only_alt=True) is True
+    assert A._eval_is_alt_sym_naive(only_sym=True) is False
+
     _random_prec = {'N_eps': N_eps,
         0: Permutation([[1, 6, 4, 2, 7, 8, 5, 9, 3], [0]]),
         1: Permutation([[1], [0, 5, 8, 4, 9, 2, 3, 6, 7]]),
@@ -464,6 +542,23 @@ def test_is_alt_sym():
         8: Permutation([[5, 8, 7], [3], [1, 4, 2, 6], [0, 9]]),
         9: Permutation([[4, 9, 6], [3, 8], [1, 2], [0, 5, 7]])}
     assert A.is_alt_sym(_random_prec=_random_prec) is False
+
+    G = PermutationGroup(
+        Permutation(1, 3, size=8)(0, 2, 4, 6),
+        Permutation(5, 7, size=8)(0, 2, 4, 6))
+    assert G.is_alt_sym() is False
+
+    # Tests for monte-carlo c_n parameter setting, and which guarantees
+    # to give False.
+    G = DihedralGroup(10)
+    assert G._eval_is_alt_sym_monte_carlo() is False
+    G = DihedralGroup(20)
+    assert G._eval_is_alt_sym_monte_carlo() is False
+
+    # A dry-running test to check if it looks up for the updated cache.
+    G = DihedralGroup(6)
+    G.is_alt_sym()
+    assert G.is_alt_sym() is False
 
 
 def test_minimal_block():
@@ -490,7 +585,7 @@ def test_minimal_blocks():
     assert P.minimal_blocks() == [[0]*5]
 
     P = PermutationGroup(Permutation(0, 3))
-    assert P.minimal_blocks() == False
+    assert P.minimal_blocks() is False
 
 
 def test_max_div():
@@ -503,6 +598,11 @@ def test_is_primitive():
     assert S.is_primitive() is True
     C = CyclicGroup(7)
     assert C.is_primitive() is True
+
+    a = Permutation(0, 1, 2, size=6)
+    b = Permutation(3, 4, 5, size=6)
+    G = PermutationGroup(a, b)
+    assert G.is_primitive() is False
 
 
 def test_random_stab():
@@ -765,14 +865,14 @@ def test_elements():
     from sympy.sets.sets import FiniteSet
 
     p = Permutation(2, 3)
-    assert PermutationGroup(p).elements == {Permutation(3), Permutation(2, 3)}
+    assert set(PermutationGroup(p).elements) == {Permutation(3), Permutation(2, 3)}
     assert FiniteSet(*PermutationGroup(p).elements) \
         == FiniteSet(Permutation(2, 3), Permutation(3))
 
 
 def test_is_group():
-    assert PermutationGroup(Permutation(1,2), Permutation(2,4)).is_group == True
-    assert SymmetricGroup(4).is_group == True
+    assert PermutationGroup(Permutation(1,2), Permutation(2,4)).is_group is True
+    assert SymmetricGroup(4).is_group is True
 
 
 def test_PermutationGroup():
@@ -792,7 +892,7 @@ def test_coset_transvesal():
 
 def test_coset_table():
     G = PermutationGroup(Permutation(0,1,2,3), Permutation(0,1,2),
-         Permutation(0,4,2,7), Permutation(5,6), Permutation(0,7));
+         Permutation(0,4,2,7), Permutation(5,6), Permutation(0,7))
     H = PermutationGroup(Permutation(0,1,2,3), Permutation(0,7))
     assert G.coset_table(H) == \
         [[0, 0, 0, 0, 1, 2, 3, 3, 0, 0], [4, 5, 2, 5, 6, 0, 7, 7, 1, 1],
@@ -829,7 +929,8 @@ def test_sylow_subgroup():
     S = P.sylow_subgroup(3)
     assert S.order() == 3
 
-    P = PermutationGroup(Permutation(1, 5)(2, 4), Permutation(0, 1, 2, 3, 4, 5), Permutation(0, 2))
+    P = PermutationGroup(
+        Permutation(1, 5)(2, 4), Permutation(0, 1, 2, 3, 4, 5), Permutation(0, 2))
     S = P.sylow_subgroup(3)
     assert S.order() == 9
     S = P.sylow_subgroup(2)
@@ -871,6 +972,14 @@ def test_sylow_subgroup():
     assert G.order() % S.order() == 0
     assert G.order()/S.order() % 2 > 0
 
+    G = DihedralGroup(18)
+    S = G.sylow_subgroup(p=2)
+    assert S.order() == 4
+
+    G = DihedralGroup(50)
+    S = G.sylow_subgroup(p=2)
+    assert S.order() == 4
+
 
 @slow
 def test_presentation():
@@ -892,7 +1001,8 @@ def test_presentation():
     P = SymmetricGroup(5)
     assert _test(P)
 
-    P = PermutationGroup([Permutation(0,3,1,2), Permutation(3)(0,1), Permutation(0,1)(2,3)])
+    P = PermutationGroup(
+        [Permutation(0,3,1,2), Permutation(3)(0,1), Permutation(0,1)(2,3)])
     assert _strong_test(P)
 
     P = DihedralGroup(6)
@@ -909,38 +1019,38 @@ def test_polycyclic():
     a = Permutation([0, 1, 2])
     b = Permutation([2, 1, 0])
     G = PermutationGroup([a, b])
-    assert G.is_polycyclic == True
+    assert G.is_polycyclic is True
 
     a = Permutation([1, 2, 3, 4, 0])
     b = Permutation([1, 0, 2, 3, 4])
     G = PermutationGroup([a, b])
-    assert G.is_polycyclic == False
+    assert G.is_polycyclic is False
 
 
 def test_elementary():
     a = Permutation([1, 5, 2, 0, 3, 6, 4])
     G = PermutationGroup([a])
-    assert G.is_elementary(7) == False
+    assert G.is_elementary(7) is False
 
     a = Permutation(0, 1)(2, 3)
     b = Permutation(0, 2)(3, 1)
     G = PermutationGroup([a, b])
-    assert G.is_elementary(2) == True
+    assert G.is_elementary(2) is True
     c = Permutation(4, 5, 6)
     G = PermutationGroup([a, b, c])
-    assert G.is_elementary(2) == False
+    assert G.is_elementary(2) is False
 
     G = SymmetricGroup(4).sylow_subgroup(2)
-    assert G.is_elementary(2) == False
+    assert G.is_elementary(2) is False
     H = AlternatingGroup(4).sylow_subgroup(2)
-    assert H.is_elementary(2) == True
+    assert H.is_elementary(2) is True
 
 
 def test_perfect():
     G = AlternatingGroup(3)
-    assert G.is_perfect == False
+    assert G.is_perfect is False
     G = AlternatingGroup(5)
-    assert G.is_perfect == True
+    assert G.is_perfect is True
 
 
 def test_index():
@@ -960,6 +1070,106 @@ def test_cyclic():
     assert G.is_cyclic
     G = AlternatingGroup(4)
     assert not G.is_cyclic
+
+    # Order less than 6
+    G = PermutationGroup(Permutation(0, 1, 2), Permutation(0, 2, 1))
+    assert G.is_cyclic
+    G = PermutationGroup(
+        Permutation(0, 1, 2, 3),
+        Permutation(0, 2)(1, 3)
+    )
+    assert G.is_cyclic
+    G = PermutationGroup(
+        Permutation(3),
+        Permutation(0, 1)(2, 3),
+        Permutation(0, 2)(1, 3),
+        Permutation(0, 3)(1, 2)
+    )
+    assert G.is_cyclic is False
+
+    # Order 15
+    G = PermutationGroup(
+        Permutation(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14),
+        Permutation(0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13)
+    )
+    assert G.is_cyclic
+
+    # Distinct prime orders
+    assert PermutationGroup._distinct_primes_lemma([3, 5]) is True
+    assert PermutationGroup._distinct_primes_lemma([5, 7]) is True
+    assert PermutationGroup._distinct_primes_lemma([2, 3]) is None
+    assert PermutationGroup._distinct_primes_lemma([3, 5, 7]) is None
+    assert PermutationGroup._distinct_primes_lemma([5, 7, 13]) is True
+
+    G = PermutationGroup(
+        Permutation(0, 1, 2, 3),
+        Permutation(0, 2)(1, 3))
+    assert G.is_cyclic
+    assert G._is_abelian
+
+    # Non-abelian and therefore not cyclic
+    G = PermutationGroup(*SymmetricGroup(3).generators)
+    assert G.is_cyclic is False
+
+    # Abelian and cyclic
+    G = PermutationGroup(
+        Permutation(0, 1, 2, 3),
+        Permutation(4, 5, 6)
+    )
+    assert G.is_cyclic
+
+    # Abelian but not cyclic
+    G = PermutationGroup(
+        Permutation(0, 1),
+        Permutation(2, 3),
+        Permutation(4, 5, 6)
+    )
+    assert G.is_cyclic is False
+
+
+def test_dihedral():
+    G = SymmetricGroup(2)
+    assert G.is_dihedral
+    G = SymmetricGroup(3)
+    assert G.is_dihedral
+
+    G = AbelianGroup(2, 2)
+    assert G.is_dihedral
+    G = CyclicGroup(4)
+    assert not G.is_dihedral
+
+    G = AbelianGroup(3, 5)
+    assert not G.is_dihedral
+    G = AbelianGroup(2)
+    assert G.is_dihedral
+    G = AbelianGroup(6)
+    assert not G.is_dihedral
+
+    # D6, generated by two adjacent flips
+    G = PermutationGroup(
+        Permutation(1, 5)(2, 4),
+        Permutation(0, 1)(3, 4)(2, 5))
+    assert G.is_dihedral
+
+    # D7, generated by a flip and a rotation
+    G = PermutationGroup(
+        Permutation(1, 6)(2, 5)(3, 4),
+        Permutation(0, 1, 2, 3, 4, 5, 6))
+    assert G.is_dihedral
+
+    # S4, presented by three generators, fails due to having exactly 9
+    # elements of order 2:
+    G = PermutationGroup(
+        Permutation(0, 1), Permutation(0, 2),
+        Permutation(0, 3))
+    assert not G.is_dihedral
+
+    # D7, given by three generators
+    G = PermutationGroup(
+        Permutation(1, 6)(2, 5)(3, 4),
+        Permutation(2, 0)(3, 6)(4, 5),
+        Permutation(0, 1, 2, 3, 4, 5, 6))
+    assert G.is_dihedral
 
 
 def test_abelian_invariants():
@@ -1013,3 +1223,87 @@ def test_composition_series():
     assert is_isomorphic(series[1], CyclicGroup(4))
     assert is_isomorphic(series[2], CyclicGroup(2))
     assert series[3].is_trivial
+
+
+def test_is_symmetric():
+    a = Permutation(0, 1, 2)
+    b = Permutation(0, 1, size=3)
+    assert PermutationGroup(a, b).is_symmetric is True
+
+    a = Permutation(0, 2, 1)
+    b = Permutation(1, 2, size=3)
+    assert PermutationGroup(a, b).is_symmetric is True
+
+    a = Permutation(0, 1, 2, 3)
+    b = Permutation(0, 3)(1, 2)
+    assert PermutationGroup(a, b).is_symmetric is False
+
+def test_conjugacy_class():
+    S = SymmetricGroup(4)
+    x = Permutation(1, 2, 3)
+    C = {Permutation(0, 1, 2, size = 4), Permutation(0, 1, 3),
+             Permutation(0, 2, 1, size = 4), Permutation(0, 2, 3),
+             Permutation(0, 3, 1), Permutation(0, 3, 2),
+             Permutation(1, 2, 3), Permutation(1, 3, 2)}
+    assert S.conjugacy_class(x) == C
+
+def test_conjugacy_classes():
+    S = SymmetricGroup(3)
+    expected = [{Permutation(size = 3)},
+         {Permutation(0, 1, size = 3), Permutation(0, 2), Permutation(1, 2)},
+         {Permutation(0, 1, 2), Permutation(0, 2, 1)}]
+    computed = S.conjugacy_classes()
+
+    assert len(expected) == len(computed)
+    assert all(e in computed for e in expected)
+
+def test_coset_class():
+    a = Permutation(1, 2)
+    b = Permutation(0, 1)
+    G = PermutationGroup([a, b])
+    #Creating right coset
+    rht_coset = G*a
+    #Checking whether it is left coset or right coset
+    assert rht_coset.is_right_coset
+    assert not rht_coset.is_left_coset
+    #Creating list representation of coset
+    list_repr = rht_coset.as_list()
+    expected = [Permutation(0, 2), Permutation(0, 2, 1), Permutation(1, 2),
+                Permutation(2), Permutation(2)(0, 1), Permutation(0, 1, 2)]
+    for ele in list_repr:
+        assert ele in expected
+    #Creating left coset
+    left_coset = a*G
+    #Checking whether it is left coset or right coset
+    assert not left_coset.is_right_coset
+    assert left_coset.is_left_coset
+    #Creating list representation of Coset
+    list_repr = left_coset.as_list()
+    expected = [Permutation(2)(0, 1), Permutation(0, 1, 2), Permutation(1, 2),
+    Permutation(2), Permutation(0, 2), Permutation(0, 2, 1)]
+    for ele in list_repr:
+        assert ele in expected
+
+    G = PermutationGroup(Permutation(1, 2, 3, 4), Permutation(2, 3, 4))
+    H = PermutationGroup(Permutation(1, 2, 3, 4))
+    g = Permutation(1, 3)(2, 4)
+    rht_coset = Coset(g, H, G, dir='+')
+    assert rht_coset.is_right_coset
+    list_repr = rht_coset.as_list()
+    expected = [Permutation(1, 2, 3, 4), Permutation(4), Permutation(1, 3)(2, 4),
+    Permutation(1, 4, 3, 2)]
+    for ele in list_repr:
+        assert ele in expected
+
+def test_symmetricpermutationgroup():
+    a = SymmetricPermutationGroup(5)
+    assert a.degree == 5
+    assert a.order() == 120
+    assert a.identity() == Permutation(4)
+
+def test_quotient_group():
+    G = SymmetricGroup(4)
+    N = AlternatingGroup(4)
+    Q = G.quotient_group(N)
+    Q_expected = CyclicGroup(2)
+    assert(is_isomorphic(Q, Q_expected) == True)

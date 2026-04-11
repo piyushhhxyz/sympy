@@ -1,20 +1,7 @@
 """
 This module adds several functions for interactive source code inspection.
 """
-
-from __future__ import print_function, division
-from sympy.core.decorators import deprecated
-from sympy.core.compatibility import string_types
-
-import inspect
-
-@deprecated(useinstead="?? in IPython/Jupyter or inspect.getsource", issue=14905, deprecated_since_version="1.3")
-def source(object):
-    """
-    Prints the source code of a given object.
-    """
-    print('In file: %s' % inspect.getsourcefile(object))
-    print(inspect.getsource(object))
+from __future__ import annotations
 
 
 def get_class(lookup_view):
@@ -24,7 +11,7 @@ def get_class(lookup_view):
     For example, get_class('sympy.core.Basic') will return
     class Basic located in module sympy.core
     """
-    if isinstance(lookup_view, string_types):
+    if isinstance(lookup_view, str):
         mod_name, func_name = get_mod_func(lookup_view)
         if func_name != '':
             lookup_view = getattr(

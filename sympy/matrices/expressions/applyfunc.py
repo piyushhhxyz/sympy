@@ -1,5 +1,10 @@
+from __future__ import annotations
+from sympy.core.expr import ExprBuilder
+from sympy.core.function import (Function, FunctionClass, Lambda)
+from sympy.core.symbol import Dummy
+from sympy.core.sympify import sympify, _sympify
 from sympy.matrices.expressions import MatrixExpr
-from sympy import MatrixBase, Dummy, Lambda, Function, FunctionClass
+from sympy.matrices.matrixbase import MatrixBase
 
 
 class ElementwiseApplyFunction(MatrixExpr):
@@ -12,22 +17,22 @@ class ElementwiseApplyFunction(MatrixExpr):
     It can be created by calling ``.applyfunc(<function>)`` on a matrix
     expression:
 
-    >>> from sympy.matrices.expressions import MatrixSymbol
+    >>> from sympy import MatrixSymbol
     >>> from sympy.matrices.expressions.applyfunc import ElementwiseApplyFunction
     >>> from sympy import exp
     >>> X = MatrixSymbol("X", 3, 3)
     >>> X.applyfunc(exp)
-    exp(X...)
+    Lambda(_d, exp(_d)).(X)
 
     Otherwise using the class constructor:
 
     >>> from sympy import eye
     >>> expr = ElementwiseApplyFunction(exp, eye(3))
     >>> expr
-    exp(Matrix([
+    Lambda(_d, exp(_d)).(Matrix([
     [1, 0, 0],
     [0, 1, 0],
-    [0, 0, 1]])...)
+    [0, 0, 1]]))
     >>> expr.doit()
     Matrix([
     [E, 1, 1],
@@ -44,45 +49,55 @@ class ElementwiseApplyFunction(MatrixExpr):
     """
 
     def __new__(cls, function, expr):
-        obj = MatrixExpr.__new__(cls, expr)
-        if not isinstance(function, FunctionClass):
-            d = Dummy("d")
-            function = Lambda(d, function(d))
-        obj._function = function
-        obj._expr = expr
-        return obj
+        expr = _sympify(expr)
+        if not expr.is_Matrix:
+            raise ValueError("{} must be a matrix instance.".format(expr))
 
-    def _hashable_content(self):
-        return (self.function, self.expr)
+        if expr.shape == (1, 1):
+            # Check if the function returns a matrix, in that case, just apply
+            # the function instead of creating an ElementwiseApplyFunc object:
+            ret = function(expr)
+            if isinstance(ret, MatrixExpr):
+                return ret
+
+        if not isinstance(function, (FunctionClass, Lambda)):
+            d = Dummy('d')
+            function = Lambda(d, function(d))
+
+        function = sympify(function)
+        if not isinstance(function, (FunctionClass, Lambda)):
+            raise ValueError(
+                "{} should be compatible with SymPy function classes."
+                .format(function))
+
+        if 1 not in function.nargs:
+            raise ValueError(
+                '{} should be able to accept 1 arguments.'.format(function))
+
+        if not isinstance(function, Lambda):
+            d = Dummy('d')
+            function = Lambda(d, function(d))
+
+        obj = MatrixExpr.__new__(cls, function, expr)
+        return obj
 
     @property
     def function(self):
-        return self._function
+        return self.args[0]
 
     @property
     def expr(self):
-        return self._expr
+        return self.args[1]
 
     @property
     def shape(self):
         return self.expr.shape
 
-    @property
-    def func(self):
-        # This strange construction is required by the assumptions:
-        # (.func needs to be a class)
-
-        class _(ElementwiseApplyFunction):
-            def __new__(cls, expr):
-                return ElementwiseApplyFunction(self.function, expr)
-
-        return _
-
-    def doit(self, **kwargs):
-        deep = kwargs.get("deep", True)
+    def doit(self, **hints):
+        deep = hints.get("deep", True)
         expr = self.expr
         if deep:
-            expr = expr.doit(**kwargs)
+            expr = expr.doit(**hints)
         function = self.function
         if isinstance(function, Lambda) and function.is_identity:
             # This is a Lambda containing the identity function.
@@ -93,7 +108,7 @@ class ElementwiseApplyFunction(MatrixExpr):
             return ElementwiseApplyFunction(
                 lambda x: self.function(expr.function(x)),
                 expr.expr
-            ).doit()
+            ).doit(**hints)
         else:
             return self
 
@@ -111,7 +126,7 @@ class ElementwiseApplyFunction(MatrixExpr):
         return fdiff
 
     def _eval_derivative(self, x):
-        from sympy import hadamard_product
+        from sympy.matrices.expressions.hadamard import hadamard_product
         dexpr = self.expr.diff(x)
         fdiff = self._get_function_fdiff()
         return hadamard_product(
@@ -120,9 +135,10 @@ class ElementwiseApplyFunction(MatrixExpr):
         )
 
     def _eval_derivative_matrix_lines(self, x):
-        from sympy import Identity
-        from sympy.codegen.array_utils import CodegenArrayContraction, CodegenArrayTensorProduct, CodegenArrayDiagonal
-        from sympy.core.expr import ExprBuilder
+        from sympy.matrices.expressions.special import Identity
+        from sympy.tensor.array.expressions.array_expressions import ArrayContraction
+        from sympy.tensor.array.expressions.array_expressions import ArrayDiagonal
+        from sympy.tensor.array.expressions.array_expressions import ArrayTensorProduct
 
         fdiff = self._get_function_fdiff()
         lr = self.expr._eval_derivative_matrix_lines(x)
@@ -139,10 +155,10 @@ class ElementwiseApplyFunction(MatrixExpr):
                     ptr2 = i.second_pointer
 
                 subexpr = ExprBuilder(
-                    CodegenArrayDiagonal,
+                    ArrayDiagonal,
                     [
                         ExprBuilder(
-                            CodegenArrayTensorProduct,
+                            ArrayTensorProduct,
                             [
                                 ewdiff,
                                 ptr1,
@@ -151,7 +167,7 @@ class ElementwiseApplyFunction(MatrixExpr):
                         ),
                         (0, 2) if iscolumn else (1, 4)
                     ],
-                    validator=CodegenArrayDiagonal._validate
+                    validator=ArrayDiagonal._validate
                 )
                 i._lines = [subexpr]
                 i._first_pointer_parent = subexpr.args[0].args
@@ -166,16 +182,16 @@ class ElementwiseApplyFunction(MatrixExpr):
                 newptr1 = Identity(ptr1.shape[1])
                 newptr2 = Identity(ptr2.shape[1])
                 subexpr = ExprBuilder(
-                    CodegenArrayContraction,
+                    ArrayContraction,
                     [
                         ExprBuilder(
-                            CodegenArrayTensorProduct,
+                            ArrayTensorProduct,
                             [ptr1, newptr1, ewdiff, ptr2, newptr2]
                         ),
                         (1, 2, 4),
                         (5, 7, 8),
                     ],
-                    validator=CodegenArrayContraction._validate
+                    validator=ArrayContraction._validate
                 )
                 i._first_pointer_parent = subexpr.args[0].args
                 i._first_pointer_index = 1
@@ -183,3 +199,7 @@ class ElementwiseApplyFunction(MatrixExpr):
                 i._second_pointer_index = 4
                 i._lines = [subexpr]
         return lr
+
+    def _eval_transpose(self):
+        from sympy.matrices.expressions.transpose import Transpose
+        return self.func(self.function, Transpose(self.expr).doit())

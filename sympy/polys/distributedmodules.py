@@ -25,8 +25,8 @@ distributedpolys.py) is never needed in this code.
 The main reference for this file is [SCA],
 "A Singular Introduction to Commutative Algebra".
 """
+from __future__ import annotations
 
-from __future__ import print_function, division
 
 from itertools import permutations
 
@@ -36,8 +36,8 @@ from sympy.polys.monomials import (
 
 from sympy.polys.polytools import Poly
 from sympy.polys.polyutils import parallel_dict_from_expr
-from sympy import S, sympify
-from sympy.core.compatibility import range
+from sympy.core.singleton import S
+from sympy.core.sympify import sympify
 
 # Additional monomial tools.
 
@@ -150,7 +150,7 @@ def sdm_monomial_divides(A, B):
 # The actual distributed modules code.
 
 def sdm_LC(f, K):
-    """Returns the leading coeffcient of ``f``. """
+    """Returns the leading coefficient of ``f``. """
     if not f:
         return K.zero
     else:
@@ -382,7 +382,7 @@ def sdm_to_vector(f, gens, K, n=None):
 
     >>> from sympy.polys.distributedmodules import sdm_to_vector
     >>> from sympy.abc import x, y, z
-    >>> from sympy.polys import QQ, lex
+    >>> from sympy.polys import QQ
     >>> f = [((1, 0, 0, 1), QQ(2)), ((0, 2, 0, 0), QQ(1)), ((0, 0, 2, 0), QQ(1))]
     >>> sdm_to_vector(f, [x, y, z], QQ)
     [x**2 + y**2, 2*z]
@@ -682,7 +682,7 @@ def sdm_groebner(G, NF, O, K, extended=False):
                     remove.add(j)
 
         # TODO mergesort?
-        P.extend(reversed([p for i, p in enumerate(N) if not i in remove]))
+        P.extend(reversed([p for i, p in enumerate(N) if i not in remove]))
         P.sort(key=ourkey, reverse=True)
         # NOTE reverse-sort, because we want to pop from the end
         return P
@@ -705,8 +705,10 @@ def sdm_groebner(G, NF, O, K, extended=False):
 
     # First add all the elements of G to S
     for i, f in enumerate(G):
+        if not f:
+            continue
         P = update(f, sdm_deg(f), P)
-        if extended and f:
+        if extended:
             coefficients.append(sdm_from_dict({(i,) + (0,)*numgens: K(1)}, O))
 
     # Now carry out the buchberger algorithm.
@@ -725,7 +727,7 @@ def sdm_groebner(G, NF, O, K, extended=False):
 
     # Finally interreduce the standard basis.
     # (TODO again, better data structures)
-    S = set((tuple(f), i) for i, f in enumerate(S))
+    S = {(tuple(f), i) for i, f in enumerate(S)}
     for (a, ai), (b, bi) in permutations(S, 2):
         A = sdm_LM(a)
         B = sdm_LM(b)

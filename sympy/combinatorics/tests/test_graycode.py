@@ -1,7 +1,8 @@
+from __future__ import annotations
 from sympy.combinatorics.graycode import (GrayCode, bin_to_gray,
     random_bitstring, get_subset_from_bitstring, graycode_subsets,
     gray_to_bin)
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 
 def test_graycode():
     g = GrayCode(2)

@@ -1,10 +1,8 @@
 """A module providing information about the necessity of brackets"""
 
-from __future__ import print_function, division
-
-from sympy.core.function import _coeff_isneg
 
 # Default precedence values for some basic types
+from __future__ import annotations
 PRECEDENCE = {
     "Lambda": 1,
     "Xor": 10,
@@ -18,6 +16,7 @@ PRECEDENCE = {
     "Not": 100,
     "Atom": 1000,
     "BitwiseOr": 36,
+    "BitwiseXor": 37,
     "BitwiseAnd": 38
 }
 
@@ -41,6 +40,7 @@ PRECEDENCE_VALUES = {
     "MatAdd": PRECEDENCE["Add"],
     "MatPow": PRECEDENCE["Pow"],
     "MatrixSolve": PRECEDENCE["Mul"],
+    "Mod": PRECEDENCE["Mul"],
     "TensAdd": PRECEDENCE["Add"],
     # As soon as `TensMul` is a subclass of `Mul`, remove this:
     "TensMul": PRECEDENCE["Mul"],
@@ -60,7 +60,16 @@ PRECEDENCE_VALUES = {
 
 
 def precedence_Mul(item):
-    if _coeff_isneg(item):
+    from sympy.core.function import Function
+    if any(hasattr(arg, 'precedence') and isinstance(arg, Function) and
+           arg.precedence < PRECEDENCE["Mul"] for arg in item.args):
+        return PRECEDENCE["Mul"]
+
+    from sympy.core.expr import UnevaluatedExpr
+    if any(isinstance(a, UnevaluatedExpr) for a in item.args):
+        return PRECEDENCE["Mul"]
+
+    if item.could_extract_minus_sign():
         return PRECEDENCE["Add"]
     return PRECEDENCE["Mul"]
 
@@ -102,7 +111,7 @@ def precedence_FracElement(item):
 
 
 def precedence_UnevaluatedExpr(item):
-    return precedence(item.args[0])
+    return precedence(item.args[0]) - 0.5
 
 
 PRECEDENCE_FUNCTIONS = {
@@ -123,16 +132,13 @@ def precedence(item):
     """
     if hasattr(item, "precedence"):
         return item.precedence
-    try:
-        mro = item.__class__.__mro__
-    except AttributeError:
-        return PRECEDENCE["Atom"]
-    for i in mro:
-        n = i.__name__
-        if n in PRECEDENCE_FUNCTIONS:
-            return PRECEDENCE_FUNCTIONS[n](item)
-        elif n in PRECEDENCE_VALUES:
-            return PRECEDENCE_VALUES[n]
+    if not isinstance(item, type):
+        for i in type(item).mro():
+            n = i.__name__
+            if n in PRECEDENCE_FUNCTIONS:
+                return PRECEDENCE_FUNCTIONS[n](item)
+            elif n in PRECEDENCE_VALUES:
+                return PRECEDENCE_VALUES[n]
     return PRECEDENCE["Atom"]
 
 
@@ -156,6 +162,7 @@ PRECEDENCE_TRADITIONAL['Intersection'] = PRECEDENCE['Xor']
 PRECEDENCE_TRADITIONAL['Complement'] = PRECEDENCE['Xor']
 PRECEDENCE_TRADITIONAL['SymmetricDifference'] = PRECEDENCE['Xor']
 PRECEDENCE_TRADITIONAL['ProductSet'] = PRECEDENCE['Xor']
+PRECEDENCE_TRADITIONAL['DotProduct'] = PRECEDENCE_TRADITIONAL['Dot']
 
 
 def precedence_traditional(item):
@@ -166,9 +173,7 @@ def precedence_traditional(item):
     """
     # Integral, Sum, Product, Limit have the precedence of Mul in LaTeX,
     # the precedence of Atom for other printers:
-    from sympy import Integral, Sum, Product, Limit, Derivative, Transpose, Adjoint
     from sympy.core.expr import UnevaluatedExpr
-    from sympy.tensor.functions import TensorProduct
 
     if isinstance(item, UnevaluatedExpr):
         return precedence_traditional(item.args[0])

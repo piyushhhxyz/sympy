@@ -1,4 +1,4 @@
-from __future__ import (absolute_import, division, print_function)
+from __future__ import annotations
 import os
 from .compilation import compile_run_strings
 from .util import CompilerNotFoundError

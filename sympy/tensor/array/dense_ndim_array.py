@@ -1,19 +1,25 @@
-from __future__ import print_function, division
+from __future__ import annotations
 import functools
 
-from sympy import Basic, Tuple, S
+from sympy.core.basic import Basic
+from sympy.core.containers import Tuple
+from sympy.core.singleton import S
 from sympy.core.sympify import _sympify
 from sympy.tensor.array.mutable_ndim_array import MutableNDimArray
-from sympy.tensor.array.ndim_array import NDimArray, ImmutableNDimArray
-from sympy.core.compatibility import SYMPY_INTS
-from sympy.core.numbers import Integer
-
+from sympy.tensor.array.ndim_array import NDimArray, ImmutableNDimArray, ArrayKind
+from sympy.utilities.iterables import flatten
 
 
 class DenseNDimArray(NDimArray):
 
+    _array: list[Basic]
+
     def __new__(self, *args, **kwargs):
         return ImmutableDenseNDimArray(*args, **kwargs)
+
+    @property
+    def kind(self) -> ArrayKind:
+        return ArrayKind._union(self._array)
 
     def __getitem__(self, index):
         """
@@ -54,7 +60,7 @@ class DenseNDimArray(NDimArray):
 
         index = self._check_index_for_getitem(index)
 
-        if isinstance(index, tuple) and any([isinstance(i, slice) for i in index]):
+        if isinstance(index, tuple) and any(isinstance(i, slice) for i in index):
             sl_factors, eindices = self._get_slice_data_for_array_access(index)
             array = [self._array[self._parse_index(i)] for i in eindices]
             nshape = [len(el) for i, el in enumerate(sl_factors) if isinstance(index[i], slice)]
@@ -87,7 +93,7 @@ class DenseNDimArray(NDimArray):
         """
         from sympy.matrices import Matrix
 
-        if self.rank() != 2:
+        if self.ndim != 2:
             raise ValueError('Dimensions must be of size of 2')
 
         return Matrix(self.shape[0], self.shape[1], self._array)
@@ -116,24 +122,18 @@ class DenseNDimArray(NDimArray):
         """
         new_total_size = functools.reduce(lambda x,y: x*y, newshape)
         if new_total_size != self._loop_size:
-            raise ValueError("Invalid reshape parameters " + newshape)
+            raise ValueError(f"Expecting reshape size to {self._loop_size} but got prod({newshape}) = {new_total_size}")
 
         # there is no `.func` as this class does not subtype `Basic`:
         return type(self)(self._array, newshape)
 
 
-class ImmutableDenseNDimArray(DenseNDimArray, ImmutableNDimArray):
-    """
-
-    """
-
+class ImmutableDenseNDimArray(DenseNDimArray, ImmutableNDimArray): # type: ignore
     def __new__(cls, iterable, shape=None, **kwargs):
         return cls._new(iterable, shape, **kwargs)
 
     @classmethod
     def _new(cls, iterable, shape, **kwargs):
-        from sympy.utilities.iterables import flatten
-
         shape, flat_list = cls._handle_ndarray_creation_inputs(iterable, shape, **kwargs)
         shape = Tuple(*map(_sympify, shape))
         cls._check_special_bounds(flat_list, shape)
@@ -142,7 +142,7 @@ class ImmutableDenseNDimArray(DenseNDimArray, ImmutableNDimArray):
         self = Basic.__new__(cls, flat_list, shape, **kwargs)
         self._shape = shape
         self._array = list(flat_list)
-        self._rank = len(shape)
+        self._ndim = len(shape)
         self._loop_size = functools.reduce(lambda x,y: x*y, shape, 1)
         return self
 
@@ -152,6 +152,9 @@ class ImmutableDenseNDimArray(DenseNDimArray, ImmutableNDimArray):
     def as_mutable(self):
         return MutableDenseNDimArray(self)
 
+    def _eval_simplify(self, **kwargs):
+        from sympy.simplify.simplify import simplify
+        return self.applyfunc(simplify)
 
 class MutableDenseNDimArray(DenseNDimArray, MutableNDimArray):
 
@@ -160,14 +163,12 @@ class MutableDenseNDimArray(DenseNDimArray, MutableNDimArray):
 
     @classmethod
     def _new(cls, iterable, shape, **kwargs):
-        from sympy.utilities.iterables import flatten
-
         shape, flat_list = cls._handle_ndarray_creation_inputs(iterable, shape, **kwargs)
         flat_list = flatten(flat_list)
         self = object.__new__(cls)
         self._shape = shape
         self._array = list(flat_list)
-        self._rank = len(shape)
+        self._ndim = len(shape)
         self._loop_size = functools.reduce(lambda x,y: x*y, shape) if shape else len(flat_list)
         return self
 
@@ -185,7 +186,7 @@ class MutableDenseNDimArray(DenseNDimArray, MutableNDimArray):
         [[1, 0], [0, 1]]
 
         """
-        if isinstance(index, tuple) and any([isinstance(i, slice) for i in index]):
+        if isinstance(index, tuple) and any(isinstance(i, slice) for i in index):
             value, eindices, slice_offsets = self._get_slice_data_for_array_assignment(index, value)
             for i in eindices:
                 other_i = [ind - j for ind, j in zip(i, slice_offsets) if j is not None]

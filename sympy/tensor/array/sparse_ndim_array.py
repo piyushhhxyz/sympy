@@ -1,11 +1,11 @@
-from __future__ import print_function, division
-
-from sympy import S, Dict, Basic, Tuple
+from __future__ import annotations
+from sympy.core.basic import Basic
+from sympy.core.containers import (Dict, Tuple)
+from sympy.core.singleton import S
 from sympy.core.sympify import _sympify
 from sympy.tensor.array.mutable_ndim_array import MutableNDimArray
 from sympy.tensor.array.ndim_array import NDimArray, ImmutableNDimArray
-from sympy.core.numbers import Integer
-from sympy.core.compatibility import SYMPY_INTS
+from sympy.utilities.iterables import flatten
 
 import functools
 
@@ -53,7 +53,7 @@ class SparseNDimArray(NDimArray):
         index = self._check_index_for_getitem(index)
 
         # `index` is a tuple with one or more slices:
-        if isinstance(index, tuple) and any([isinstance(i, slice) for i in index]):
+        if isinstance(index, tuple) and any(isinstance(i, slice) for i in index):
             sl_factors, eindices = self._get_slice_data_for_array_access(index)
             array = [self._sparse_array.get(self._parse_index(i), S.Zero) for i in eindices]
             nshape = [len(el) for i, el in enumerate(sl_factors) if isinstance(index[i], slice)]
@@ -86,7 +86,7 @@ class SparseNDimArray(NDimArray):
         [1, 1, 1]])
         """
         from sympy.matrices import SparseMatrix
-        if self.rank() != 2:
+        if self.ndim != 2:
             raise ValueError('Dimensions must be of size of 2')
 
         mat_sparse = {}
@@ -102,11 +102,9 @@ class SparseNDimArray(NDimArray):
 
         return type(self)(self._sparse_array, newshape)
 
-class ImmutableSparseNDimArray(SparseNDimArray, ImmutableNDimArray):
+class ImmutableSparseNDimArray(SparseNDimArray, ImmutableNDimArray): # type: ignore
 
     def __new__(cls, iterable=None, shape=None, **kwargs):
-        from sympy.utilities.iterables import flatten
-
         shape, flat_list = cls._handle_ndarray_creation_inputs(iterable, shape, **kwargs)
         shape = Tuple(*map(_sympify, shape))
         cls._check_special_bounds(flat_list, shape)
@@ -125,7 +123,7 @@ class ImmutableSparseNDimArray(SparseNDimArray, ImmutableNDimArray):
 
         self = Basic.__new__(cls, sparse_array, shape, **kwargs)
         self._shape = shape
-        self._rank = len(shape)
+        self._ndim = len(shape)
         self._loop_size = loop_size
         self._sparse_array = sparse_array
 
@@ -141,12 +139,10 @@ class ImmutableSparseNDimArray(SparseNDimArray, ImmutableNDimArray):
 class MutableSparseNDimArray(MutableNDimArray, SparseNDimArray):
 
     def __new__(cls, iterable=None, shape=None, **kwargs):
-        from sympy.utilities.iterables import flatten
-
         shape, flat_list = cls._handle_ndarray_creation_inputs(iterable, shape, **kwargs)
         self = object.__new__(cls)
         self._shape = shape
-        self._rank = len(shape)
+        self._ndim = len(shape)
         self._loop_size = functools.reduce(lambda x,y: x*y, shape) if shape else len(flat_list)
 
         # Sparse array:
@@ -175,7 +171,7 @@ class MutableSparseNDimArray(MutableNDimArray, SparseNDimArray):
         >>> a
         [[1, 0], [0, 1]]
         """
-        if isinstance(index, tuple) and any([isinstance(i, slice) for i in index]):
+        if isinstance(index, tuple) and any(isinstance(i, slice) for i in index):
             value, eindices, slice_offsets = self._get_slice_data_for_array_assignment(index, value)
             for i in eindices:
                 other_i = [ind - j for ind, j in zip(i, slice_offsets) if j is not None]

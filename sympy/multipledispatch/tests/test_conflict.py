@@ -1,10 +1,11 @@
+from __future__ import annotations
 from sympy.multipledispatch.conflict import (supercedes, ordering, ambiguities,
         ambiguous, super_signature, consistent)
 
 
-class A(object): pass
+class A: pass
 class B(A): pass
-class C(object): pass
+class C: pass
 
 
 def test_supercedes():
@@ -41,7 +42,7 @@ def test_ambiguous():
 
 def test_ambiguities():
     signatures = [[A], [B], [A, B], [B, A], [A, C]]
-    expected = set([((A, B), (B, A))])
+    expected = {((A, B), (B, A))}
     result = ambiguities(signatures)
     assert set(map(frozenset, expected)) == set(map(frozenset, result))
 

@@ -1,3 +1,6 @@
+from __future__ import annotations
+from sympy.functions.elementary.complexes import conjugate
+from sympy.functions.elementary.exponential import exp
 from sympy.physics.secondquant import (
     Dagger, Bd, VarBosonicBasis, BBra, B, BKet, FixedBosonicBasis,
     matrix_rep, apply_operators, InnerProduct, Commutator, KroneckerDelta,
@@ -6,15 +9,20 @@ from sympy.physics.secondquant import (
     evaluate_deltas, AntiSymmetricTensor, contraction, NO, wicks,
     PermutationOperator, simplify_index_permutations,
     _sort_anticommuting_fermions, _get_ordered_dummies,
-    substitute_dummies, FockState, FockStateBosonKet,
+    substitute_dummies, FockStateBosonKet,
     ContractionAppliesOnlyToFermions
 )
 
-from sympy import (Dummy, expand, Function, I, Rational, simplify, sqrt, Sum,
-                   Symbol, symbols, srepr)
+from sympy.concrete.summations import Sum
+from sympy.core.function import (Function, expand)
+from sympy.core.numbers import (I, Rational)
+from sympy.core.singleton import S
+from sympy.core.symbol import (Dummy, Symbol, symbols)
+from sympy.functions.elementary.miscellaneous import sqrt
+from sympy.printing.repr import srepr
+from sympy.simplify.simplify import simplify
 
-from sympy.core.compatibility import range
-from sympy.utilities.pytest import XFAIL, slow, raises
+from sympy.testing.pytest import slow, raises
 from sympy.printing.latex import latex
 
 
@@ -34,6 +42,8 @@ def test_PermutationOperator():
         P(p, q)*P(r, s)*f(p)*g(q)*h(r)*i(s))
     assert latex(P(p, q)) == 'P(pq)'
 
+    p1, p2 = symbols('p1,p2')
+    assert latex(P(p1,p2) == 'P(p_{1}p_{2})')
 
 def test_index_permutations_with_dummies():
     a, b, c, d = symbols('a b c d')
@@ -68,7 +78,7 @@ def test_dagger():
     assert Dagger(1) == 1
     assert Dagger(1.0) == 1.0
     assert Dagger(2*I) == -2*I
-    assert Dagger(Rational(1, 2)*I/3.0) == -Rational(1, 2)*I/3.0
+    assert Dagger(S.Half*I/3.0) == I*Rational(-1, 2)/3.0
     assert Dagger(BKet([n])) == BBra([n])
     assert Dagger(B(0)) == Bd(0)
     assert Dagger(Bd(0)) == B(0)
@@ -80,6 +90,8 @@ def test_dagger():
     assert Dagger(B(n)**10) == Dagger(B(n))**10
     assert Dagger('a') == Dagger(Symbol('a'))
     assert Dagger(Dagger('a')) == Symbol('a')
+    assert Dagger(exp(2 * I)) == exp(-2 * I)
+    assert Dagger(i) == conjugate(i)
 
 
 def test_operator():
@@ -93,9 +105,10 @@ def test_operator():
 
 
 def test_create():
-    i, j, n, m = symbols('i,j,n,m')
+    i, j, n, m, p1 = symbols('i,j,n,m,p1')
     o = Bd(i)
-    assert latex(o) == "b^\\dagger_{i}"
+    assert latex(o) == "{b^\\dagger_{i}}"
+    assert latex(Bd(p1)) == "{b^\\dagger_{p_{1}}}"
     assert isinstance(o, CreateBoson)
     o = o.subs(i, j)
     assert o.atoms(Symbol) == {j}
@@ -106,9 +119,10 @@ def test_create():
 
 
 def test_annihilate():
-    i, j, n, m = symbols('i,j,n,m')
+    i, j, n, m, p1 = symbols('i,j,n,m,p1')
     o = B(i)
     assert latex(o) == "b_{i}"
+    assert latex(B(p1)) == "b_{p_{1}}"
     assert isinstance(o, AnnihilateBoson)
     o = o.subs(i, j)
     assert o.atoms(Symbol) == {j}
@@ -133,26 +147,6 @@ def test_basic_state():
     s = BosonState([n, m])
     assert s.down(0) == BosonState([n - 1, m])
     assert s.up(0) == BosonState([n + 1, m])
-
-
-# 2019-07-24: No method move in the whole of SymPy
-@XFAIL
-def test_move1():
-    i, j = symbols('i,j')
-    A, C = symbols('A,C', cls=Function)
-    o = A(i)*C(j)
-    # This almost works, but has a minus sign wrong
-    assert move(o, 0, 1) == KroneckerDelta(i, j) + C(j)*A(i)
-
-
-# 2019-07-24: No method move in the whole of SymPy
-@XFAIL
-def test_move2():
-    i, j = symbols('i,j')
-    A, C = symbols('A,C', cls=Function)
-    o = C(j)*A(i)
-    # This almost works, but has a minus sign wrong
-    assert move(o, 0, 1) == -KroneckerDelta(i, j) + A(i)*C(j)
 
 
 def test_basic_apply():
@@ -227,7 +221,7 @@ def test_fixed_bosonic_basis():
 @slow
 def test_sho():
     n, m = symbols('n,m')
-    h_n = Bd(n)*B(n)*(n + Rational(1, 2))
+    h_n = Bd(n)*B(n)*(n + S.Half)
     H = Sum(h_n, (n, 0, 5))
     o = H.doit(deep=False)
     b = FixedBosonicBasis(2, 6)
@@ -279,7 +273,7 @@ def test_commutation():
     c1 = Commutator(F(a), Fd(a))
     assert Commutator.eval(c1, c1) == 0
     c = Commutator(Fd(a)*F(i),Fd(b)*F(j))
-    assert latex(c) == r'\left[a^\dagger_{a} a_{i},a^\dagger_{b} a_{j}\right]'
+    assert latex(c) == r'\left[{a^\dagger_{a}} a_{i},{a^\dagger_{b}} a_{j}\right]'
     assert repr(c) == 'Commutator(CreateFermion(a)*AnnihilateFermion(i),CreateFermion(b)*AnnihilateFermion(j))'
     assert str(c) == '[CreateFermion(a)*AnnihilateFermion(i),CreateFermion(b)*AnnihilateFermion(j)]'
 
@@ -302,6 +296,7 @@ def test_create_f():
     i, j, k, l = symbols('i,j,k,l', below_fermi=True)
     a, b, c, d = symbols('a,b,c,d', above_fermi=True)
     p, q, r, s = symbols('p,q,r,s')
+    p1 = symbols("p1")
 
     assert Fd(i).apply_operator(FKet([i, j, k], 4)) == FKet([j, k], 4)
     assert Fd(a).apply_operator(FKet([i, b, k], 4)) == FKet([a, i, b, k], 4)
@@ -309,7 +304,10 @@ def test_create_f():
     assert Dagger(B(p)).apply_operator(q) == q*CreateBoson(p)
     assert repr(Fd(p)) == 'CreateFermion(p)'
     assert srepr(Fd(p)) == "CreateFermion(Symbol('p'))"
-    assert latex(Fd(p)) == r'a^\dagger_{p}'
+    assert latex(Fd(p)) == r'{a^\dagger_{p}}'
+    assert latex(Fd(p1)) == r'{a^\dagger_{p_{1}}}'
+    assert latex(FKet([a,i], 1)) == r"\left|\left( a, \  i\right)\right\rangle"
+    assert latex(FKet([j,i,b,a], 2)) == r"\left|\left( a, \  b, \  i, \  j\right)\right\rangle"
 
 
 def test_annihilate_f():
@@ -327,6 +325,8 @@ def test_annihilate_f():
     i, j, k, l = symbols('i,j,k,l', below_fermi=True)
     a, b, c, d = symbols('a,b,c,d', above_fermi=True)
     p, q, r, s = symbols('p,q,r,s')
+    p1 = symbols('p1')
+
     assert F(i).apply_operator(FKet([i, j, k], 4)) == 0
     assert F(a).apply_operator(FKet([i, b, k], 4)) == 0
     assert F(l).apply_operator(FKet([i, j, k], 3)) == 0
@@ -335,6 +335,7 @@ def test_annihilate_f():
     assert repr(F(p)) == 'AnnihilateFermion(p)'
     assert srepr(F(p)) == "AnnihilateFermion(Symbol('p'))"
     assert latex(F(p)) == 'a_{p}'
+    assert latex(F(p1)) == 'a_{p_{1}}'
 
 
 def test_create_b():
@@ -438,16 +439,16 @@ def test_NO():
     assert NO(Fd(a)*F(b)) == - NO(F(b)*Fd(a))
 
     no = NO(Fd(a)*F(i)*F(b)*Fd(j))
-    l1 = [ ind for ind in no.iter_q_creators() ]
+    l1 = list(no.iter_q_creators())
     assert l1 == [0, 1]
-    l2 = [ ind for ind in no.iter_q_annihilators() ]
+    l2 = list(no.iter_q_annihilators())
     assert l2 == [3, 2]
     no = NO(Fd(a)*Fd(i))
     assert no.has_q_creators == 1
     assert no.has_q_annihilators == -1
     assert str(no) == ':CreateFermion(a)*CreateFermion(i):'
     assert repr(no) == 'NO(CreateFermion(a)*CreateFermion(i))'
-    assert latex(no) == r'\left\{a^\dagger_{a} a^\dagger_{i}\right\}'
+    assert latex(no) == r'\left\{{a^\dagger_{a}} {a^\dagger_{i}}\right\}'
     raises(NotImplementedError, lambda:  NO(Bd(p)*F(q)))
 
 
@@ -552,11 +553,17 @@ def test_Tensors():
     assert tabij.subs(b, c) == AT('t', (a, c), (i, j))
     assert (2*tabij).subs(i, c) == 2*AT('t', (a, b), (c, j))
     assert tabij.symbol == Symbol('t')
-    assert latex(tabij) == 't^{ab}_{ij}'
+    assert latex(tabij) == '{t^{ab}_{ij}}'
     assert str(tabij) == 't((_a, _b),(_i, _j))'
 
     assert AT('t', (a, a), (i, j)).subs(a, b) == AT('t', (b, b), (i, j))
     assert AT('t', (a, i), (a, j)).subs(a, b) == AT('t', (b, i), (b, j))
+
+    a1, a2, a3, a4 = symbols('alpha1:5')
+    u_alpha1234 = AntiSymmetricTensor("u", (a1, a2), (a3, a4))
+
+    assert latex(u_alpha1234) == r'{u^{\alpha_{1}\alpha_{2}}_{\alpha_{3}\alpha_{4}}}'
+    assert str(u_alpha1234) == 'u((alpha1, alpha2),(alpha3, alpha4))'
 
 
 def test_fully_contracted():
@@ -1276,10 +1283,14 @@ def test_internal_external_pqrs_AT():
         assert substitute_dummies(exprs[0]) == substitute_dummies(permut)
 
 
+def test_issue_19661():
+    a = Symbol('0')
+    assert latex(Commutator(Bd(a)**2, B(a))
+                 ) == '- \\left[b_{0},{b^\\dagger_{0}}^{2}\\right]'
+
+
 def test_canonical_ordering_AntiSymmetricTensor():
     v = symbols("v")
-    virtual_indices = ('c', 'd')
-    occupied_indices = ('k', 'l')
 
     c, d = symbols(('c','d'), above_fermi=True,
                                    cls=Dummy)

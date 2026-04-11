@@ -1,9 +1,8 @@
-from __future__ import print_function, division
-
+from __future__ import annotations
 from sympy.core.sympify import _sympify
 from sympy.core import S, Basic
 
-from sympy.matrices.expressions.matexpr import ShapeError
+from sympy.matrices.exceptions import NonSquareMatrixError
 from sympy.matrices.expressions.matpow import MatPow
 
 
@@ -32,16 +31,17 @@ class Inverse(MatPow):
 
     """
     is_Inverse = True
-    exp = S(-1)
+    exp = S.NegativeOne
 
-    def __new__(cls, mat, exp=S(-1)):
+    def __new__(cls, mat, exp=S.NegativeOne):
         # exp is there to make it consistent with
         # inverse.func(*inverse.args) == inverse
         mat = _sympify(mat)
+        exp = _sympify(exp)
         if not mat.is_Matrix:
             raise TypeError("mat should be a matrix")
-        if not mat.is_square:
-            raise ShapeError("Inverse of non-square matrix %s" % mat)
+        if mat.is_square is False:
+            raise NonSquareMatrixError("Inverse of non-square matrix %s" % mat)
         return Basic.__new__(cls, mat, exp)
 
     @property
@@ -55,6 +55,15 @@ class Inverse(MatPow):
     def _eval_inverse(self):
         return self.arg
 
+    def _eval_transpose(self):
+        return Inverse(self.arg.transpose())
+
+    def _eval_adjoint(self):
+        return Inverse(self.arg.adjoint())
+
+    def _eval_conjugate(self):
+        return Inverse(self.arg.conjugate())
+
     def _eval_determinant(self):
         from sympy.matrices.expressions.determinant import det
         return 1/det(self.arg)
@@ -62,10 +71,12 @@ class Inverse(MatPow):
     def doit(self, **hints):
         if 'inv_expand' in hints and hints['inv_expand'] == False:
             return self
+
+        arg = self.arg
         if hints.get('deep', True):
-            return self.arg.doit(**hints).inverse()
-        else:
-            return self.arg.inverse()
+            arg = arg.doit(**hints)
+
+        return arg.inverse()
 
     def _eval_derivative_matrix_lines(self, x):
         arg = self.args[0]

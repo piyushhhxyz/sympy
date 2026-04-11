@@ -1,14 +1,28 @@
-from sympy import (
-    Abs, acos, adjoint, arg, atan, atan2, conjugate, cos, DiracDelta,
-    E, exp, expand, Expr, Function, Heaviside, I, im, log, nan, oo,
-    pi, Rational, re, S, sign, sin, sqrt, Symbol, symbols, transpose,
-    zoo, exp_polar, Piecewise, Interval, comp, Integral, Matrix,
-    ImmutableMatrix, SparseMatrix, ImmutableSparseMatrix, MatrixSymbol,
-    FunctionMatrix, Lambda, Derivative)
+from __future__ import annotations
+from sympy.core.function import (Derivative, Function, Lambda, expand, PoleError)
+from sympy.core.numbers import (E, I, Rational, comp, nan, oo, pi, zoo)
+from sympy.core.relational import Eq
+from sympy.core.singleton import S
+from sympy.core.symbol import (Symbol, symbols)
+from sympy.functions.elementary.complexes import (Abs, adjoint, arg, conjugate, im, re, sign, transpose)
+from sympy.functions.elementary.exponential import (exp, exp_polar, log)
+from sympy.functions.elementary.miscellaneous import sqrt
+from sympy.functions.elementary.piecewise import Piecewise
+from sympy.functions.elementary.trigonometric import (acos, atan, atan2, cos, sin)
+from sympy.functions.elementary.hyperbolic import sinh
+from sympy.functions.special.delta_functions import (DiracDelta, Heaviside)
+from sympy.integrals.integrals import Integral
+from sympy.matrices.dense import Matrix
+from sympy.matrices.expressions.funcmatrix import FunctionMatrix
+from sympy.matrices.expressions.matexpr import MatrixSymbol
+from sympy.matrices.immutable import (ImmutableMatrix, ImmutableSparseMatrix)
+from sympy.matrices import SparseMatrix
+from sympy.sets.sets import Interval
 from sympy.core.expr import unchanged
 from sympy.core.function import ArgumentIndexError
-from sympy.utilities.pytest import XFAIL, raises
-
+from sympy.series.order import Order
+from sympy.testing.pytest import XFAIL, raises, _both_exp_pow
+from sympy.physics.quantum import HermitianOperator
 
 def N_equals(a, b):
     """Check whether two complex numbers are numerically close"""
@@ -22,10 +36,10 @@ def test_re():
     r = Symbol('r', real=True)
     i = Symbol('i', imaginary=True)
 
-    assert re(nan) == nan
+    assert re(nan) is nan
 
-    assert re(oo) == oo
-    assert re(-oo) == -oo
+    assert re(oo) is oo
+    assert re(-oo) is -oo
 
     assert re(0) == 0
 
@@ -70,7 +84,7 @@ def test_re():
     assert re(a * (2 + b*I)) == 2*a
 
     assert re((1 + sqrt(a + b*I))/2) == \
-        (a**2 + b**2)**Rational(1, 4)*cos(atan2(b, a)/2)/2 + Rational(1, 2)
+        (a**2 + b**2)**Rational(1, 4)*cos(atan2(b, a)/2)/2 + S.Half
 
     assert re(x).rewrite(im) == x - S.ImaginaryUnit*im(x)
     assert (x + re(y)).rewrite(re, im) == x + y - S.ImaginaryUnit*im(y)
@@ -82,11 +96,11 @@ def test_re():
     assert re(x).is_algebraic is None
     assert re(t).is_algebraic is False
 
-    assert re(S.ComplexInfinity) == S.NaN
+    assert re(S.ComplexInfinity) is S.NaN
 
     n, m, l = symbols('n m l')
     A = MatrixSymbol('A',n,m)
-    assert re(A) == (S(1)/2) * (A + conjugate(A))
+    assert re(A) == (S.Half) * (A + conjugate(A))
 
     A = Matrix([[1 + 4*I,2],[0, -3*I]])
     assert re(A) == Matrix([[1, 2],[0, 0]])
@@ -118,10 +132,10 @@ def test_im():
     r = Symbol('r', real=True)
     i = Symbol('i', imaginary=True)
 
-    assert im(nan) == nan
+    assert im(nan) is nan
 
-    assert im(oo*I) == oo
-    assert im(-oo*I) == -oo
+    assert im(oo*I) is oo
+    assert im(-oo*I) is -oo
 
     assert im(0) == 0
 
@@ -179,12 +193,12 @@ def test_im():
     assert re(x).is_algebraic is None
     assert re(t).is_algebraic is False
 
-    assert im(S.ComplexInfinity) == S.NaN
+    assert im(S.ComplexInfinity) is S.NaN
 
     n, m, l = symbols('n m l')
     A = MatrixSymbol('A',n,m)
 
-    assert im(A) == (S(1)/(2*I)) * (A - conjugate(A))
+    assert im(A) == (S.One/(2*I)) * (A - conjugate(A))
 
     A = Matrix([[1 + 4*I, 2],[0, -3*I]])
     assert im(A) == Matrix([[4, 0],[0, -3]])
@@ -194,7 +208,7 @@ def test_im():
 
     X = ImmutableSparseMatrix(
             [[i*I + i for i in range(5)] for i in range(5)])
-    Y = SparseMatrix([[i for i in range(5)] for i in range(5)])
+    Y = SparseMatrix([list(range(5)) for i in range(5)])
     assert im(X).as_immutable() == Y
 
     X = FunctionMatrix(3, 3, Lambda((n, m), n + m*I))
@@ -206,7 +220,9 @@ def test_sign():
     assert sign(3*I) == I
     assert sign(-3*I) == -I
     assert sign(0) == 0
-    assert sign(nan) == nan
+    assert sign(0, evaluate=False).doit() == 0
+    assert sign(oo, evaluate=False).doit() == 1
+    assert sign(nan) is nan
     assert sign(2 + 2*I).doit() == sqrt(2)*(2 + 2*I)/4
     assert sign(2 + 3*I).simplify() == sign(2 + 3*I)
     assert sign(2 + 2*I).simplify() == sign(1 + I)
@@ -296,11 +312,14 @@ def test_sign():
     assert sign(Symbol('x', real=True, zero=False)).is_nonpositive is None
 
     x, y = Symbol('x', real=True), Symbol('y')
+    f = Function('f')
     assert sign(x).rewrite(Piecewise) == \
         Piecewise((1, x > 0), (-1, x < 0), (0, True))
     assert sign(y).rewrite(Piecewise) == sign(y)
     assert sign(x).rewrite(Heaviside) == 2*Heaviside(x, H0=S(1)/2) - 1
     assert sign(y).rewrite(Heaviside) == sign(y)
+    assert sign(y).rewrite(Abs) == Piecewise((0, Eq(y, 0)), (y/Abs(y), True))
+    assert sign(f(y)).rewrite(Abs) == Piecewise((0, Eq(f(y), 0)), (f(y)/Abs(f(y)), True))
 
     # evaluate what can be evaluated
     assert sign(exp_polar(I*pi)*pi) is S.NegativeOne
@@ -328,15 +347,15 @@ def test_as_real_imag():
     # issue 6261
     x = Symbol('x')
     assert sqrt(x).as_real_imag() == \
-        ((re(x)**2 + im(x)**2)**(S(1)/4)*cos(atan2(im(x), re(x))/2),
-     (re(x)**2 + im(x)**2)**(S(1)/4)*sin(atan2(im(x), re(x))/2))
+        ((re(x)**2 + im(x)**2)**Rational(1, 4)*cos(atan2(im(x), re(x))/2),
+     (re(x)**2 + im(x)**2)**Rational(1, 4)*sin(atan2(im(x), re(x))/2))
 
     # issue 3853
     a, b = symbols('a,b', real=True)
     assert ((1 + sqrt(a + b*I))/2).as_real_imag() == \
            (
                (a**2 + b**2)**Rational(
-                   1, 4)*cos(atan2(b, a)/2)/2 + Rational(1, 2),
+                   1, 4)*cos(atan2(b, a)/2)/2 + S.Half,
                (a**2 + b**2)**Rational(1, 4)*sin(atan2(b, a)/2)/2)
 
     assert sqrt(a**2).as_real_imag() == (sqrt(a**2), 0)
@@ -372,8 +391,8 @@ def test_Abs():
     assert Abs(-1) == 1
     assert Abs(I) == 1
     assert Abs(-I) == 1
-    assert Abs(nan) == nan
-    assert Abs(zoo) == oo
+    assert Abs(nan) is nan
+    assert Abs(zoo) is oo
     assert Abs(I * pi) == pi
     assert Abs(-I * pi) == pi
     assert Abs(I * x) == Abs(x)
@@ -404,7 +423,7 @@ def test_Abs():
     assert Abs(x)**-3 == Abs(x)/(x**4)
     assert Abs(x**3) == x**2*Abs(x)
     assert Abs(I**I) == exp(-pi/2)
-    assert Abs((4 + 5*I)**(6 + 7*I)) == 68921*exp(-7*atan(S(5)/4))
+    assert Abs((4 + 5*I)**(6 + 7*I)) == 68921*exp(-7*atan(Rational(5, 4)))
     y = Symbol('y', real=True)
     assert Abs(I**y) == 1
     y = Symbol('y')
@@ -458,6 +477,11 @@ def test_Abs():
 
     # coverage
     assert unchanged(Abs, Symbol('x', real=True)**y)
+    # issue 19627
+    f = Function('f', positive=True)
+    assert sqrt(f(x)**2) == f(x)
+    # issue 21625
+    assert unchanged(Abs, S("im(acos(-i + acosh(-g + i)))"))
 
 
 def test_Abs_rewrite():
@@ -524,10 +548,10 @@ def test_Abs_properties():
     assert Abs(f).is_extended_nonnegative is True
 
     z = Symbol('z', complex=True, zero=False)
-    assert Abs(z).is_real is None
+    assert Abs(z).is_real is True # since complex implies finite
     assert Abs(z).is_extended_real is True
     assert Abs(z).is_rational is None
-    assert Abs(z).is_positive is None
+    assert Abs(z).is_positive is True
     assert Abs(z).is_extended_positive is True
     assert Abs(z).is_zero is False
 
@@ -572,25 +596,48 @@ def test_abs():
 
 
 def test_arg():
-    assert arg(0) == nan
+    assert arg(0) is nan
     assert arg(1) == 0
     assert arg(-1) == pi
     assert arg(I) == pi/2
     assert arg(-I) == -pi/2
     assert arg(1 + I) == pi/4
-    assert arg(-1 + I) == 3*pi/4
+    assert arg(-1 + I) == pi*Rational(3, 4)
     assert arg(1 - I) == -pi/4
     assert arg(exp_polar(4*pi*I)) == 4*pi
     assert arg(exp_polar(-7*pi*I)) == -7*pi
-    assert arg(exp_polar(5 - 3*pi*I/4)) == -3*pi/4
+    assert arg(exp_polar(5 - 3*pi*I/4)) == pi*Rational(-3, 4)
+
+    assert arg(exp(I*pi/7)) == pi/7     # issue 17300
+    assert arg(exp(16*I)) == 16 - 6*pi
+    assert arg(exp(13*I*pi/12)) == -11*pi/12
+    assert arg(exp(123 - 5*I)) == -5 + 2*pi
+    assert arg(exp(sin(1 + 3*I))) == -2*pi + cos(1)*sinh(3)
+    r = Symbol('r', real=True)
+    assert arg(exp(r - 2*I)) == -2
+
     f = Function('f')
     assert not arg(f(0) + I*f(1)).atoms(re)
 
+    # check nesting
+    x = Symbol('x')
+    assert arg(arg(arg(x))) is not S.NaN
+    assert arg(arg(arg(arg(x)))) is S.NaN
+    r = Symbol('r', extended_real=True)
+    assert arg(arg(r)) is not S.NaN
+    assert arg(arg(arg(r))) is S.NaN
+
+    p = Function('p', extended_positive=True)
+    assert arg(p(x)) == 0
+    assert arg((3 + I)*p(x)) == arg(3  + I)
+
     p = Symbol('p', positive=True)
     assert arg(p) == 0
+    assert arg(p*I) == pi/2
 
     n = Symbol('n', negative=True)
     assert arg(n) == pi
+    assert arg(n*I) == -pi/2
 
     x = Symbol('x')
     assert conjugate(arg(x)) == arg(x)
@@ -625,23 +672,29 @@ def test_arg_rewrite():
     assert arg(x + I*y).rewrite(atan2) == atan2(y, x)
 
 
+def test_arg_leading_term_and_series():
+    x = Symbol('x')
+    assert arg(x).as_leading_term(x, cdir = 1) == 0
+    assert arg(x).as_leading_term(x, cdir = -1) == pi
+    raises(PoleError, lambda: arg(x + I).as_leading_term(x, cdir = 1))
+    raises(PoleError, lambda: arg(2*x).as_leading_term(x, cdir = I))
+
+    assert arg(x).nseries(x) == 0
+    assert arg(x).nseries(x, n=0) == Order(1)
+
+
 def test_adjoint():
-    a = Symbol('a', antihermitian=True)
-    b = Symbol('b', hermitian=True)
-    assert adjoint(a) == -a
-    assert adjoint(I*a) == I*a
+    b = HermitianOperator("b")
     assert adjoint(b) == b
     assert adjoint(I*b) == -I*b
-    assert adjoint(a*b) == -b*a
-    assert adjoint(I*a*b) == I*b*a
 
     x, y = symbols('x y')
     assert adjoint(adjoint(x)) == x
-    assert adjoint(x + y) == adjoint(x) + adjoint(y)
-    assert adjoint(x - y) == adjoint(x) - adjoint(y)
-    assert adjoint(x * y) == adjoint(x) * adjoint(y)
-    assert adjoint(x / y) == adjoint(x) / adjoint(y)
-    assert adjoint(-x) == -adjoint(x)
+    assert adjoint(x + y) == conjugate(x) + conjugate(y)
+    assert adjoint(x - y) == conjugate(x) - conjugate(y)
+    assert adjoint(x * y) == conjugate(x) * conjugate(y)
+    assert adjoint(x / y) == conjugate(x) / conjugate(y)
+    assert adjoint(-x) == -conjugate(x)
 
     x, y = symbols('x y', commutative=False)
     assert adjoint(adjoint(x)) == x
@@ -664,6 +717,7 @@ def test_conjugate():
 
     x, y = symbols('x y')
     assert conjugate(conjugate(x)) == x
+    assert conjugate(x).inverse() == conjugate
     assert conjugate(x + y) == conjugate(x) + conjugate(y)
     assert conjugate(x - y) == conjugate(x) - conjugate(y)
     assert conjugate(x * y) == conjugate(x) * conjugate(y)
@@ -678,7 +732,7 @@ def test_conjugate():
 
 
 def test_conjugate_transpose():
-    x = Symbol('x')
+    x = Symbol('x', commutative=False)
     assert conjugate(transpose(x)) == adjoint(x)
     assert transpose(conjugate(x)) == adjoint(x)
     assert adjoint(transpose(x)) == conjugate(x)
@@ -686,16 +740,7 @@ def test_conjugate_transpose():
     assert adjoint(conjugate(x)) == transpose(x)
     assert conjugate(adjoint(x)) == transpose(x)
 
-    class Symmetric(Expr):
-        def _eval_adjoint(self):
-            return None
-
-        def _eval_conjugate(self):
-            return None
-
-        def _eval_transpose(self):
-            return self
-    x = Symmetric()
+    x = Symbol('x')
     assert conjugate(x) == adjoint(x)
     assert transpose(x) == x
 
@@ -707,11 +752,11 @@ def test_transpose():
 
     x, y = symbols('x y')
     assert transpose(transpose(x)) == x
-    assert transpose(x + y) == transpose(x) + transpose(y)
-    assert transpose(x - y) == transpose(x) - transpose(y)
-    assert transpose(x * y) == transpose(x) * transpose(y)
-    assert transpose(x / y) == transpose(x) / transpose(y)
-    assert transpose(-x) == -transpose(x)
+    assert transpose(x + y) == x + y
+    assert transpose(x - y) == x - y
+    assert transpose(x * y) == x * y
+    assert transpose(x / y) == x / y
+    assert transpose(-x) == -x
 
     x, y = symbols('x y', commutative=False)
     assert transpose(transpose(x)) == x
@@ -722,8 +767,9 @@ def test_transpose():
     assert transpose(-x) == -transpose(x)
 
 
+@_both_exp_pow
 def test_polarify():
-    from sympy import polar_lift, polarify
+    from sympy.functions.elementary.complexes import (polar_lift, polarify)
     x = Symbol('x')
     z = Symbol('z', polar=True)
     f = Function('f')
@@ -758,9 +804,11 @@ def test_polarify():
 
 
 def test_unpolarify():
-    from sympy import (exp_polar, polar_lift, exp, unpolarify,
-                       principal_branch)
-    from sympy import gamma, erf, sin, tanh, uppergamma, Eq, Ne
+    from sympy.functions.elementary.complexes import (polar_lift, principal_branch, unpolarify)
+    from sympy.core.relational import Ne
+    from sympy.functions.elementary.hyperbolic import tanh
+    from sympy.functions.special.error_functions import erf
+    from sympy.functions.special.gamma_functions import (gamma, uppergamma)
     from sympy.abc import x
     p = exp_polar(7*I) + 1
     u = exp(7*I) + 1
@@ -837,7 +885,7 @@ def test_derivatives_issue_4757():
 
 
 def test_issue_11413():
-    from sympy import Matrix, simplify
+    from sympy.simplify.simplify import simplify
     v0 = Symbol('v0')
     v1 = Symbol('v1')
     v2 = Symbol('v2')
@@ -850,9 +898,9 @@ def test_issue_11413():
     U.norm = sqrt(v0**2/(v0**2 + v1**2 + v2**2) + v1**2/(v0**2 + v1**2 + v2**2) + v2**2/(v0**2 + v1**2 + v2**2))
     assert simplify(U.norm) == 1
 
+
 def test_periodic_argument():
-    from sympy import (periodic_argument, unbranched_argument, oo,
-                       principal_branch, polar_lift, pi)
+    from sympy.functions.elementary.complexes import (periodic_argument, polar_lift, principal_branch, unbranched_argument)
     x = Symbol('x')
     p = Symbol('p', positive=True)
 
@@ -884,12 +932,12 @@ def test_periodic_argument():
 @XFAIL
 def test_principal_branch_fail():
     # TODO XXX why does abs(x)._eval_evalf() not fall back to global evalf?
-    from sympy import principal_branch
+    from sympy.functions.elementary.complexes import principal_branch
     assert N_equals(principal_branch((1 + I)**2, pi/2), 0)
 
 
 def test_principal_branch():
-    from sympy import principal_branch, polar_lift, exp_polar
+    from sympy.functions.elementary.complexes import (polar_lift, principal_branch)
     p = Symbol('p', positive=True)
     x = Symbol('x')
     neg = Symbol('x', negative=True)
@@ -929,9 +977,9 @@ def test_issue_6167_6151():
     big = pi**1000
     one = cos(x)**2 + sin(x)**2
     e = big*one - big + eps
-    from sympy import simplify
+    from sympy.simplify.simplify import simplify
     assert sign(simplify(e)) == 1
-    for xi in (111, 11, 1, S(1)/10):
+    for xi in (111, 11, 1, Rational(1, 10)):
         assert sign(e.subs(x, xi)) == 1
 
 
@@ -946,6 +994,13 @@ def test_issue_14238():
     # doesn't cause recursion error
     r = Symbol('r', real=True)
     assert Abs(r + Piecewise((0, r > 0), (1 - r, True)))
+
+
+def test_issue_22189():
+    x = Symbol('x')
+    for a in (sqrt(7 - 2*x) - 2, 1 - x):
+        assert Abs(a) - Abs(-a) == 0, a
+
 
 def test_zero_assumptions():
     nr = Symbol('nonreal', real=False, finite=True)
@@ -962,6 +1017,8 @@ def test_zero_assumptions():
     assert re(nzni).is_zero is False
     assert im(nzni).is_zero is None
 
+
+@_both_exp_pow
 def test_issue_15893():
     f = Function('f', real=True)
     x = Symbol('x', real=True)

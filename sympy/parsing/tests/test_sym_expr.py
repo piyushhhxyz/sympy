@@ -1,15 +1,16 @@
+from __future__ import annotations
 from sympy.parsing.sym_expr import SymPyExpression
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 from sympy.external import import_module
 
 lfortran = import_module('lfortran')
-cin = import_module('clang.cindex', __import__kwargs = {'fromlist': ['cindex']})
+cin = import_module('clang.cindex', import_kwargs = {'fromlist': ['cindex']})
 
 if lfortran and cin:
     from sympy.codegen.ast import (Variable, IntBaseType, FloatBaseType, String,
-                                   Declaration,)
+                                   Declaration, FloatType)
     from sympy.core import Integer, Float
-    from sympy import Symbol
+    from sympy.core.symbol import Symbol
 
     expr1 = SymPyExpression()
     src = """\
@@ -28,28 +29,36 @@ if lfortran and cin:
         assert ls[0] == Declaration(
             Variable(
                 Symbol('a'),
-                type=IntBaseType(String('integer')),
-                value=Integer(0)
+                type=IntBaseType(String('intc'))
             )
         )
         assert ls[1] == Declaration(
             Variable(
                 Symbol('b'),
-                type=IntBaseType(String('integer')),
+                type=IntBaseType(String('intc')),
                 value=Integer(4)
             )
         )
         assert ls[2] == Declaration(
             Variable(
                 Symbol('c'),
-                type=FloatBaseType(String('real')),
-                value=Float('0.0', precision=53)
+                type=FloatType(
+                    String('float32'),
+                    nbits=Integer(32),
+                    nmant=Integer(23),
+                    nexp=Integer(8)
+                    )
             )
         )
         assert ls[3] == Declaration(
             Variable(
                 Symbol('d'),
-                type=FloatBaseType(String('real')),
+                type=FloatType(
+                    String('float32'),
+                    nbits=Integer(32),
+                    nmant=Integer(23),
+                    nexp=Integer(8)
+                    ),
                 value=Float('2.3999999999999999', precision=53)
             )
         )
@@ -115,7 +124,6 @@ if lfortran and cin:
                 value=Float('0.0', precision=53)
             )
         )
-
 
 
     def test_convert_py():
@@ -198,4 +206,5 @@ if lfortran and cin:
 
 elif not lfortran and not cin:
     def test_raise():
-        raises(ImportError, lambda: SymPyExpression())
+        raises(ImportError, lambda: SymPyExpression('int a;', 'c'))
+        raises(ImportError, lambda: SymPyExpression('integer :: a', 'f'))

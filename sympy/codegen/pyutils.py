@@ -1,19 +1,20 @@
+from __future__ import annotations
 from sympy.printing.pycode import PythonCodePrinter
 
 """ This module collects utilities for rendering Python code. """
 
 
 def render_as_module(content, standard='python3'):
-    """Renders python code as a module (with the required imports)
+    """Renders Python code as a module (with the required imports).
 
     Parameters
     ==========
 
-    standard
+    standard :
         See the parameter ``standard`` in
         :meth:`sympy.printing.pycode.pycode`
     """
-    # XXX Remove the keyword 'standard' after dropping python 2 support.
+
     printer = PythonCodePrinter({'standard':standard})
     pystr = printer.doprint(content)
     if printer._settings['fully_qualified_modules']:

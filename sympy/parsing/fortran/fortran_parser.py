@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sympy.external import import_module
 
 lfortran = import_module('lfortran')
@@ -6,7 +7,7 @@ if lfortran:
     from sympy.codegen.ast import (Variable, IntBaseType, FloatBaseType, String,
                                    Return, FunctionDefinition, Assignment)
     from sympy.core import Add, Mul, Integer, Float
-    from sympy import Symbol
+    from sympy.core.symbol import Symbol
 
     asr_mod = lfortran.asr
     asr = lfortran.asr.asr
@@ -45,8 +46,8 @@ if lfortran:
     LFortran : Required to parse Fortran source code into ASR
 
 
-    Refrences
-    =========
+    References
+    ==========
 
     .. [1] https://github.com/sympy/sympy/issues
     .. [2] https://gitlab.com/lfortran/lfortran
@@ -55,7 +56,7 @@ if lfortran:
     """
 
 
-    class ASR2PyVisitor(asr.ASTVisitor):
+    class ASR2PyVisitor(asr.ASTVisitor):  # type: ignore
         """
         Visitor Class for LFortran ASR
 
@@ -99,7 +100,7 @@ if lfortran:
             NotImplementedError() when called for Numeric assignments or Arrays
 
             """
-            # TODO: Arithmatic Assignment
+            # TODO: Arithmetic Assignment
             if isinstance(node.target, asr.Variable):
                 target = node.target
                 value = node.value
@@ -255,15 +256,9 @@ if lfortran:
 
             """
             # TODO: Return statement, variable declaration
-            fn_args =[]
+            fn_args = [Variable(arg_iter.name) for arg_iter in node.args]
             fn_body = []
             fn_name = node.name
-            for arg_iter in node.args:
-                fn_args.append(
-                    Variable(
-                        arg_iter.name
-                    )
-                )
             for i in node.body:
                 fn_ast = call_visitor(i)
             try:
@@ -301,7 +296,7 @@ if lfortran:
             """Returns the AST nodes"""
             return self._py_ast
 else:
-    class ASR2PyVisitor():
+    class ASR2PyVisitor():  # type: ignore
         def __init__(self, *args, **kwargs):
             raise ImportError('lfortran not available')
 
@@ -322,7 +317,7 @@ def call_visitor(fort_node):
     =======
 
     res_ast : list
-        list of sympy AST Nodes
+        list of SymPy AST Nodes
 
     """
     v = ASR2PyVisitor()
@@ -344,7 +339,7 @@ def src_to_sympy(src):
     =======
 
     py_src : string
-        A string with the python source code compatible with SymPy
+        A string with the Python source code compatible with SymPy
 
     """
     a_ast = src_to_ast(src, translation_unit=False)

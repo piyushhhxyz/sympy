@@ -1,9 +1,10 @@
+from __future__ import annotations
 from sympy.core.expr import unchanged
 from sympy.core.mul import Mul
 from sympy.matrices import Matrix
 from sympy.matrices.expressions.matexpr import MatrixSymbol
 from sympy.matrices.expressions.dotproduct import DotProduct
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 
 
 A = Matrix(3, 1, [1, 2, 3])

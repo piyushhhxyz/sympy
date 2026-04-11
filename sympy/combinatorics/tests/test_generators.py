@@ -1,7 +1,8 @@
+from __future__ import annotations
 from sympy.combinatorics.generators import symmetric, cyclic, alternating, \
     dihedral, rubik
 from sympy.combinatorics.permutations import Permutation
-from sympy.utilities.pytest import raises
+from sympy.testing.pytest import raises
 
 def test_generators():
 

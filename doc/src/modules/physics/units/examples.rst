@@ -1,6 +1,6 @@
-========
-Examples
-========
+=============
+More examples
+=============
 
 In the following sections we give few examples of what can be done with this
 module.
@@ -30,16 +30,17 @@ to determine the dimension of the Newton's constant :math:`G`. The result
 should be :math:`L^3 M^{-1} T^{-2}`.
 
     >>> from sympy import symbols
+    >>> from sympy.physics.units.systems import SI
     >>> from sympy.physics.units import length, mass, acceleration, force
     >>> from sympy.physics.units import gravitational_constant as G
-    >>> from sympy.physics.units.dimensions import dimsys_SI
+    >>> from sympy.physics.units.systems.si import dimsys_SI
     >>> F = mass*acceleration
     >>> F
     Dimension(acceleration*mass)
     >>> dimsys_SI.get_dimensional_dependencies(F)
-    {'length': 1, 'mass': 1, 'time': -2}
+    {Dimension(length): 1, Dimension(mass, M): 1, Dimension(time): -2}
     >>> dimsys_SI.get_dimensional_dependencies(force)
-    {'length': 1, 'mass': 1, 'time': -2}
+    {Dimension(length): 1, Dimension(mass): 1, Dimension(time): -2}
 
     Dimensions cannot compared directly, even if in the SI convention they are
     the same:
@@ -85,14 +86,14 @@ variables (taken from Wikipedia). The result should be 224.701 days.
 
     Specify the dimension and scale in SI units:
 
-    >>> a.set_dimension(length, "SI")
-    >>> a.set_scale_factor(108208000e3*meter, "SI")
+    >>> SI.set_quantity_dimension(a, length)
+    >>> SI.set_quantity_scale_factor(a, 108208000e3*meter)
 
     Add the solar mass as quantity:
 
     >>> M = Quantity("solar_mass")
-    >>> M.set_dimension(mass, "SI")
-    >>> M.set_scale_factor(1.9891e30*kilogram, "SI")
+    >>> SI.set_quantity_dimension(M, mass)
+    >>> SI.set_quantity_scale_factor(M, 1.9891e30*kilogram)
 
     Now Kepler's law:
 

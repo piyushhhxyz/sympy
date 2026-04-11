@@ -1,4 +1,5 @@
-class State(object):
+from __future__ import annotations
+class State:
     '''
     A representation of a state managed by a ``StateMachine``.
 
@@ -28,7 +29,7 @@ class State(object):
         '''
         self.transitions[letter] = state
 
-class StateMachine(object):
+class StateMachine:
     '''
     Representation of a finite state machine the manages the states and the transitions of the automaton.
 

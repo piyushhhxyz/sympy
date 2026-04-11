@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
+from __future__ import annotations
 from sympy.combinatorics.fp_groups import FpGroup
 from sympy.combinatorics.coset_table import (CosetTable,
                     coset_enumeration_r, coset_enumeration_c)
 from sympy.combinatorics.coset_table import modified_coset_enumeration_r
 from sympy.combinatorics.free_groups import free_group
 
-from sympy.utilities.pytest import slow
+from sympy.testing.pytest import slow
 
 """
 References
@@ -140,7 +140,7 @@ def test_coset_enumeration():
     assert C_r.table == table1
     assert C_c.table == table1
 
-    # E₁ from [2] Pg. 474
+    # E1 from [2] Pg. 474
     F, r, s, t = free_group("r, s, t")
     E1 = FpGroup(F, [t**-1*r*t*r**-2, r**-1*s*r*s**-2, s**-1*t*s*t**-2])
     C_r = coset_enumeration_r(E1, [])
@@ -660,10 +660,10 @@ def test_coset_enumeration():
              [460, 489, 498, 498],
              [472, 472, 471, 491]]
 
-    C_r.table == table3
-    C_c.table == table3
+    assert C_r.table == table3
+    assert C_c.table == table3
 
-    # Group denoted by B₂,₄ from [2] Pg. 474
+    # Group denoted by B2,4 from [2] Pg. 474
     F, a, b = free_group("a, b")
     B_2_4 = FpGroup(F, [a**4, b**4, (a*b)**4, (a**-1*b)**4, (a**2*b)**4, \
             (a*b**2)**4, (a**2*b**2)**4, (a**-1*b*a*b)**4, (a*b**-1*a*b)**4])
@@ -691,6 +691,12 @@ def test_coset_enumeration():
     assert C_r.table == table4
     assert C_c.table == table4
 
+    # regression test for wrong initialization of modified coset enumeration
+    F2, a, b = free_group("a, b")
+    H1 = FpGroup(F2, [a**2, b**2, (a*b)**3])
+    Y = [a*b, b**-1]
+    C = modified_coset_enumeration_r(H1, Y)
+    assert C.table == [[0, 0, 0, 0], [None, 0, 0, None]]
 
 def test_look_ahead():
     # Section 3.2 [Test Example] Example (d) from [2]
