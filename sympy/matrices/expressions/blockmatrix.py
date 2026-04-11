@@ -164,16 +164,44 @@ class BlockMatrix(MatrixExpr):
     def _blockmul(self, other):
         if (isinstance(other, BlockMatrix) and
                 self.colblocksizes == other.rowblocksizes):
-            return BlockMatrix(self.blocks*other.blocks)
+            return BlockMatrix(self._reblock_scalar_zeros(
+                self.blocks*other.blocks,
+                self.rowblocksizes, other.colblocksizes))
 
         return self * other
 
     def _blockadd(self, other):
         if (isinstance(other, BlockMatrix)
                 and self.structurally_equal(other)):
-            return BlockMatrix(self.blocks + other.blocks)
+            return BlockMatrix(self._reblock_scalar_zeros(
+                self.blocks + other.blocks,
+                self.rowblocksizes, self.colblocksizes))
 
         return self + other
+
+    @staticmethod
+    def _reblock_scalar_zeros(M, row_sizes, col_sizes):
+        """Convert any scalar Zero entries in a block result matrix
+        back to ZeroMatrix of the correct dimensions."""
+        from sympy.matrices.immutable import ImmutableDenseMatrix
+        from sympy import S
+        nrows = M.rows
+        ncols = M.cols
+        if nrows == 0 or ncols == 0:
+            return M
+        new_entries = []
+        changed = False
+        for i in range(nrows):
+            for j in range(ncols):
+                entry = M[i, j]
+                if not getattr(entry, 'is_Matrix', False) and entry == S.Zero:
+                    new_entries.append(ZeroMatrix(row_sizes[i], col_sizes[j]))
+                    changed = True
+                else:
+                    new_entries.append(entry)
+        if not changed:
+            return M
+        return ImmutableDenseMatrix(nrows, ncols, new_entries)
 
     def _eval_transpose(self):
         # Flip all the individual matrices
