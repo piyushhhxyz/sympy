@@ -1110,6 +1110,14 @@ class EvaluateFalseTransformer(ast.NodeTransformer):
         ast.BitAnd: 'And',
         ast.BitXor: 'Not',
     }
+    relational_operators = {
+        ast.Lt: 'Lt',
+        ast.Gt: 'Gt',
+        ast.LtE: 'Le',
+        ast.GtE: 'Ge',
+        ast.Eq: 'Eq',
+        ast.NotEq: 'Ne',
+    }
     functions = (
         'Abs', 'im', 're', 'sign', 'arg', 'conjugate',
         'acos', 'acot', 'acsc', 'asec', 'asin', 'atan',
@@ -1185,6 +1193,37 @@ class EvaluateFalseTransformer(ast.NodeTransformer):
 
             return new_node
         return node
+
+    def visit_Compare(self, node):
+        # Build a chain of relational calls for each comparison operator.
+        # For a single comparison like `a < b`, this produces `Lt(a, b, evaluate=False)`.
+        # For chained comparisons like `a < b < c`, this produces
+        # `And(Lt(a, b, evaluate=False), Lt(b, c, evaluate=False), evaluate=False)`.
+        left = self.visit(node.left)
+        relations = []
+        for op, comparator in zip(node.ops, node.comparators):
+            op_class = op.__class__
+            if op_class not in self.relational_operators:
+                return node
+            sympy_class = self.relational_operators[op_class]
+            right = self.visit(comparator)
+            relations.append(ast.Call(
+                func=ast.Name(id=sympy_class, ctx=ast.Load()),
+                args=[left, right],
+                keywords=[ast.keyword(arg='evaluate', value=ast.NameConstant(value=False, ctx=ast.Load()))],
+                starargs=None,
+                kwargs=None
+            ))
+            left = right
+        if len(relations) == 1:
+            return relations[0]
+        return ast.Call(
+            func=ast.Name(id='And', ctx=ast.Load()),
+            args=relations,
+            keywords=[ast.keyword(arg='evaluate', value=ast.NameConstant(value=False, ctx=ast.Load()))],
+            starargs=None,
+            kwargs=None
+        )
 
     def visit_Call(self, node):
         new_node = self.generic_visit(node)
