@@ -7,6 +7,7 @@ import types
 
 from sympy.assumptions import Q
 from sympy.core import Symbol, Function, Float, Rational, Integer, I, Mul, Pow, Eq
+from sympy.core.relational import Lt, Le, Gt, Ge, Ne
 from sympy.functions import exp, factorial, factorial2, sin, Min, Max
 from sympy.logic import And
 from sympy.series import Limit
@@ -359,3 +360,16 @@ def test_issue_22822():
     raises(ValueError, lambda: parse_expr('x', {'': 1}))
     data = {'some_parameter': None}
     assert parse_expr('some_parameter is None', data) is True
+
+
+def test_issue_24661():
+    # evaluate=False should be respected for relational operators
+    assert parse_expr("1 < 2", evaluate=False) == Lt(1, 2, evaluate=False)
+    assert parse_expr("1 <= 2", evaluate=False) == Le(1, 2, evaluate=False)
+    assert parse_expr("1 > 2", evaluate=False) == Gt(1, 2, evaluate=False)
+    assert parse_expr("1 >= 2", evaluate=False) == Ge(1, 2, evaluate=False)
+    assert parse_expr("1 != 2", evaluate=False) == Ne(1, 2, evaluate=False)
+    assert parse_expr("1 == 2", evaluate=False) == Eq(1, 2, evaluate=False)
+    # chained comparisons
+    assert parse_expr("1 < 2 < 3", evaluate=False) == \
+        And(Lt(1, 2, evaluate=False), Lt(2, 3, evaluate=False), evaluate=False)

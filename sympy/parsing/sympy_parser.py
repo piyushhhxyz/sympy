@@ -1110,6 +1110,14 @@ class EvaluateFalseTransformer(ast.NodeTransformer):
         ast.BitAnd: 'And',
         ast.BitXor: 'Not',
     }
+    relational_operators = {
+        ast.Lt: 'Lt',
+        ast.Gt: 'Gt',
+        ast.LtE: 'Le',
+        ast.GtE: 'Ge',
+        ast.Eq: 'Eq',
+        ast.NotEq: 'Ne',
+    }
     functions = (
         'Abs', 'im', 're', 'sign', 'arg', 'conjugate',
         'acos', 'acot', 'acsc', 'asec', 'asin', 'atan',
@@ -1185,6 +1193,38 @@ class EvaluateFalseTransformer(ast.NodeTransformer):
 
             return new_node
         return node
+
+    def visit_Compare(self, node):
+        # Transform comparison operators to SymPy relational calls with evaluate=False
+        node = self.generic_visit(node)
+        # Build individual comparisons
+        args = []
+        left = node.left
+        for op, comparator in zip(node.ops, node.comparators):
+            op_class = op.__class__
+            if op_class in self.relational_operators:
+                sympy_class = self.relational_operators[op_class]
+                new_node = ast.Call(
+                    func=ast.Name(id=sympy_class, ctx=ast.Load()),
+                    args=[left, comparator],
+                    keywords=[ast.keyword(arg='evaluate', value=ast.Constant(value=False))],
+                    starargs=None,
+                    kwargs=None
+                )
+                args.append(new_node)
+            else:
+                return node
+            left = comparator
+        if len(args) == 1:
+            return args[0]
+        # Chained comparisons: combine with And(evaluate=False)
+        return ast.Call(
+            func=ast.Name(id='And', ctx=ast.Load()),
+            args=args,
+            keywords=[ast.keyword(arg='evaluate', value=ast.Constant(value=False))],
+            starargs=None,
+            kwargs=None
+        )
 
     def visit_Call(self, node):
         new_node = self.generic_visit(node)
