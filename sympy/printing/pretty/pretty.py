@@ -819,7 +819,38 @@ class PrettyPrinter(Printer):
         return self._print(B.blocks)
 
     def _print_MatAdd(self, expr):
-        return self._print_seq(expr.args, None, None, ' + ')
+        from sympy.matrices.expressions.matmul import MatMul
+
+        def pretty_negative(pform, index):
+            """Prepend a minus sign to a pretty form."""
+            if index == 0:
+                if pform.height() > 1:
+                    pform_neg = '- '
+                else:
+                    pform_neg = '-'
+            else:
+                pform_neg = ' - '
+            if (pform.binding > prettyForm.NEG
+                    or pform.binding == prettyForm.ADD):
+                p = stringPict(*pform.parens())
+            else:
+                p = pform
+            p = stringPict.next(pform_neg, p)
+            return prettyForm(binding=prettyForm.NEG, *p)
+
+        pforms = []
+        for i, term in enumerate(expr.args):
+            if isinstance(term, MatMul) and term.args[0].is_Number and term.args[0].is_negative:
+                neg_coeff = -term.args[0]
+                rest = term.args[1:]
+                if neg_coeff == S.One:
+                    pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
+                else:
+                    pos_term = MatMul(neg_coeff, *rest)
+                pforms.append(pretty_negative(self._print(pos_term), i))
+            else:
+                pforms.append(self._print(term))
+        return prettyForm.__add__(*pforms)
 
     def _print_MatMul(self, expr):
         args = list(expr.args)

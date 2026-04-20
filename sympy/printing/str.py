@@ -312,8 +312,34 @@ class StrPrinter(Printer):
             for arg in expr.args])
 
     def _print_MatAdd(self, expr):
-        return ' + '.join([self.parenthesize(arg, precedence(expr))
-            for arg in expr.args])
+        from sympy.matrices.expressions.matmul import MatMul
+
+        def get_sign_and_term(term):
+            """Return (sign, positive_term) for a MatAdd term."""
+            if isinstance(term, MatMul) and term.args[0].is_Number and term.args[0].is_negative:
+                neg_coeff = -term.args[0]
+                rest = term.args[1:]
+                if neg_coeff == S.One:
+                    pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
+                else:
+                    pos_term = MatMul(neg_coeff, *rest)
+                return '-', pos_term
+            return '+', term
+
+        terms = list(expr.args)
+        PREC = precedence(expr)
+        parts = []
+        for i, term in enumerate(terms):
+            sign, pos_term = get_sign_and_term(term)
+            s = self.parenthesize(pos_term, PREC)
+            if i == 0:
+                if sign == '-':
+                    parts.append('-' + s)
+                else:
+                    parts.append(s)
+            else:
+                parts.append(sign + ' ' + s)
+        return ' '.join(parts)
 
     def _print_NaN(self, expr):
         return 'nan'
