@@ -818,36 +818,35 @@ class PrettyPrinter(Printer):
             return self._print(B.blocks[0, 0])
         return self._print(B.blocks)
 
-    def _print_MatAdd(self, expr):
-        from sympy.matrices.expressions.matmul import MatMul
+    def _pretty_negative(self, pform, index):
+        """Prepend a minus sign to a pretty form. """
+        #TODO: Move this code to prettyForm
+        if index == 0:
+            if pform.height() > 1:
+                pform_neg = '- '
+            else:
+                pform_neg = '-'
+        else:
+            pform_neg = ' - '
 
-        def pretty_negative(pform, index):
-            """Prepend a minus sign to a pretty form."""
-            if index == 0:
-                if pform.height() > 1:
-                    pform_neg = '- '
-                else:
-                    pform_neg = '-'
-            else:
-                pform_neg = ' - '
-            if (pform.binding > prettyForm.NEG
-                    or pform.binding == prettyForm.ADD):
-                p = stringPict(*pform.parens())
-            else:
-                p = pform
-            p = stringPict.next(pform_neg, p)
-            return prettyForm(binding=prettyForm.NEG, *p)
+        if (pform.binding > prettyForm.NEG
+            or pform.binding == prettyForm.ADD):
+            p = stringPict(*pform.parens())
+        else:
+            p = pform
+        p = stringPict.next(pform_neg, p)
+        # Lower the binding to NEG, even if it was higher. Otherwise, it
+        # will print as a + ( - (b)), instead of a - (b).
+        return prettyForm(binding=prettyForm.NEG, *p)
+
+    def _print_MatAdd(self, expr):
+        from sympy.printing.str import _matadd_strip_neg
 
         pforms = []
         for i, term in enumerate(expr.args):
-            if isinstance(term, MatMul) and term.args[0].is_Number and term.args[0].is_negative:
-                neg_coeff = -term.args[0]
-                rest = term.args[1:]
-                if neg_coeff == S.One:
-                    pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
-                else:
-                    pos_term = MatMul(neg_coeff, *rest)
-                pforms.append(pretty_negative(self._print(pos_term), i))
+            neg, pos_term = _matadd_strip_neg(term)
+            if neg:
+                pforms.append(self._pretty_negative(self._print(pos_term), i))
             else:
                 pforms.append(self._print(term))
         return prettyForm.__add__(*pforms)
@@ -1446,38 +1445,17 @@ class PrettyPrinter(Printer):
             terms = self._as_ordered_terms(expr, order=order)
         pforms, indices = [], []
 
-        def pretty_negative(pform, index):
-            """Prepend a minus sign to a pretty form. """
-            #TODO: Move this code to prettyForm
-            if index == 0:
-                if pform.height() > 1:
-                    pform_neg = '- '
-                else:
-                    pform_neg = '-'
-            else:
-                pform_neg = ' - '
-
-            if (pform.binding > prettyForm.NEG
-                or pform.binding == prettyForm.ADD):
-                p = stringPict(*pform.parens())
-            else:
-                p = pform
-            p = stringPict.next(pform_neg, p)
-            # Lower the binding to NEG, even if it was higher. Otherwise, it
-            # will print as a + ( - (b)), instead of a - (b).
-            return prettyForm(binding=prettyForm.NEG, *p)
-
         for i, term in enumerate(terms):
             if term.is_Mul and _coeff_isneg(term):
                 coeff, other = term.as_coeff_mul(rational=False)
                 pform = self._print(Mul(-coeff, *other, evaluate=False))
-                pforms.append(pretty_negative(pform, i))
+                pforms.append(self._pretty_negative(pform, i))
             elif term.is_Rational and term.q > 1:
                 pforms.append(None)
                 indices.append(i)
             elif term.is_Number and term < 0:
                 pform = self._print(-term)
-                pforms.append(pretty_negative(pform, i))
+                pforms.append(self._pretty_negative(pform, i))
             elif term.is_Relational:
                 pforms.append(prettyForm(*self._print(term).parens()))
             else:
@@ -1504,7 +1482,7 @@ class PrettyPrinter(Printer):
                     pform = self._print(term)
 
                 if negative:
-                    pform = pretty_negative(pform, i)
+                    pform = self._pretty_negative(pform, i)
 
                 pforms[i] = pform
 

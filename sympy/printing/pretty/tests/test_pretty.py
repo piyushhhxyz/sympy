@@ -3014,15 +3014,26 @@ def test_MatrixExpressions():
     assert upretty(Z) == ucode_str
 
 
-def test_MatAdd_printing():
+def test_MatAdd_minus_sign_printing():
     # Test that differences of MatrixSymbols print with minus signs,
     # not as sums with (-1) coefficients.
     A = MatrixSymbol('A', 2, 2)
     B = MatrixSymbol('B', 2, 2)
+    C = MatrixSymbol('C', 2, 2)
+
+    # ASCII
+    assert pretty(A - B) == '-B + A'
+    assert pretty(A - A*B - B) == '-B - A*B + A'
+    assert pretty(A - 2*B) == '-2*B + A'
+    assert pretty(-A - B) == '-A - B'
+    assert pretty(C - (A + B)) == '-(A + B) + C'
+
+    # Unicode
     assert upretty(A - B) == u'-B + A'
     assert upretty(A - A*B - B) == u'-B - A\u22c5B + A'
     assert upretty(A - 2*B) == u'-2\u22c5B + A'
     assert upretty(-A - B) == u'-A - B'
+    assert upretty(C - (A + B)) == u'-(A + B) + C'
 
 def test_pretty_dotproduct():
     from sympy.matrices import Matrix, MatrixSymbol

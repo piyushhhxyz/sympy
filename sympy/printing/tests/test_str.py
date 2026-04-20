@@ -746,16 +746,18 @@ def test_MatMul_MatAdd():
         "2*(X + Y)"
 
 
-def test_MatAdd_printing():
+def test_MatAdd_minus_sign_printing():
     # Test that differences of MatrixSymbols print with minus signs,
     # not as sums with (-1) coefficients.
-    from sympy import MatrixSymbol
     A = MatrixSymbol('A', 2, 2)
     B = MatrixSymbol('B', 2, 2)
+    C = MatrixSymbol('C', 2, 2)
     assert str(A - B) == '-B + A'
     assert str(A - A*B - B) == '-B - A*B + A'
     assert str(A - 2*B) == '-2*B + A'
     assert str(-A - B) == '-A - B'
+    # Negative coefficient on a grouped MatAdd must not lose brackets
+    assert str(C - (A + B)) == '-(A + B) + C'
 
 def test_MatrixSlice():
     from sympy.matrices.expressions import MatrixSymbol

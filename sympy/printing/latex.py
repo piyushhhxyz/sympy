@@ -1477,33 +1477,24 @@ class LatexPrinter(Printer):
             return r"%s^\dagger" % self._print(mat)
 
     def _print_MatAdd(self, expr):
-        from sympy.matrices.expressions.matmul import MatMul
-
-        def get_sign_and_term(term):
-            """Return (sign, positive_term) for a MatAdd term."""
-            if isinstance(term, MatMul) and term.args[0].is_Number and term.args[0].is_negative:
-                neg_coeff = -term.args[0]
-                rest = term.args[1:]
-                if neg_coeff == S.One:
-                    pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
-                else:
-                    pos_term = MatMul(neg_coeff, *rest)
-                return '-', pos_term
-            return '+', term
+        from sympy.printing.str import _matadd_strip_neg
 
         terms = list(expr.args)
-        parts = []
+        tex = ""
         for i, term in enumerate(terms):
-            sign, pos_term = get_sign_and_term(term)
-            s = self._print(pos_term)
+            neg, pos_term = _matadd_strip_neg(term)
             if i == 0:
-                if sign == '-':
-                    parts.append('-' + s)
-                else:
-                    parts.append(s)
+                if neg:
+                    tex += "-"
+            elif neg:
+                tex += " - "
             else:
-                parts.append(sign + ' ' + s)
-        return ' '.join(parts)
+                tex += " + "
+            term_tex = self._print(pos_term)
+            if self._needs_add_brackets(pos_term) or pos_term.is_MatAdd:
+                term_tex = r"\left(%s\right)" % term_tex
+            tex += term_tex
+        return tex
 
     def _print_MatMul(self, expr):
         from sympy import Add, MatAdd, HadamardProduct

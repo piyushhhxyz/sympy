@@ -15,6 +15,27 @@ from mpmath.libmp import prec_to_dps
 from sympy.utilities import default_sort_key
 
 
+def _matadd_strip_neg(term):
+    """For a MatAdd term, detect and strip a leading negative ``Number``
+    coefficient on a ``MatMul``.
+
+    Returns a tuple ``(is_negative, positive_term)``.  When ``is_negative``
+    is True, ``positive_term`` is ``term`` with its leading negative Number
+    coefficient negated so it can be printed after an explicit minus sign.
+    """
+    from sympy.matrices.expressions.matmul import MatMul
+    if (isinstance(term, MatMul) and term.args[0].is_Number
+            and term.args[0].is_negative):
+        coeff = -term.args[0]
+        rest = term.args[1:]
+        if coeff == S.One:
+            pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
+        else:
+            pos_term = MatMul(coeff, *rest)
+        return True, pos_term
+    return False, term
+
+
 class StrPrinter(Printer):
     printmethod = "_sympystr"
     _default_settings = {
@@ -312,34 +333,20 @@ class StrPrinter(Printer):
             for arg in expr.args])
 
     def _print_MatAdd(self, expr):
-        from sympy.matrices.expressions.matmul import MatMul
-
-        def get_sign_and_term(term):
-            """Return (sign, positive_term) for a MatAdd term."""
-            if isinstance(term, MatMul) and term.args[0].is_Number and term.args[0].is_negative:
-                neg_coeff = -term.args[0]
-                rest = term.args[1:]
-                if neg_coeff == S.One:
-                    pos_term = rest[0] if len(rest) == 1 else MatMul(*rest)
-                else:
-                    pos_term = MatMul(neg_coeff, *rest)
-                return '-', pos_term
-            return '+', term
-
         terms = list(expr.args)
         PREC = precedence(expr)
-        parts = []
+        l = []
         for i, term in enumerate(terms):
-            sign, pos_term = get_sign_and_term(term)
-            s = self.parenthesize(pos_term, PREC)
+            neg, pos_term = _matadd_strip_neg(term)
             if i == 0:
-                if sign == '-':
-                    parts.append('-' + s)
+                if neg:
+                    l.append('-' + self.parenthesize(pos_term, PREC))
                 else:
-                    parts.append(s)
+                    l.append(self.parenthesize(pos_term, PREC))
             else:
-                parts.append(sign + ' ' + s)
-        return ' '.join(parts)
+                l.append(' - ' if neg else ' + ')
+                l.append(self.parenthesize(pos_term, PREC))
+        return ''.join(l)
 
     def _print_NaN(self, expr):
         return 'nan'

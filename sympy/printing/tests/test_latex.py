@@ -1204,13 +1204,16 @@ def test_matAdd():
 def test_matAdd_minus_sign():
     # Test that differences of MatrixSymbols print with minus signs,
     # not as sums with (-1) coefficients.
-    from sympy import MatrixSymbol
     A = MatrixSymbol('A', 2, 2)
     B = MatrixSymbol('B', 2, 2)
+    C = MatrixSymbol('C', 2, 2)
     assert latex(A - B) == '-B + A'
     assert latex(A - A*B - B) == '-B - A B + A'
     assert latex(A - 2*B) == '-2 B + A'
     assert latex(-A - B) == '-A - B'
+    # Regression: a negative coefficient on a grouped MatAdd must keep
+    # brackets so the sign is not distributed into the group.
+    assert latex(C - (A + B)) == r'-\left(A + B\right) + C'
 
 
 def test_matMul():
